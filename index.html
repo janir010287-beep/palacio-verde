@@ -109,10 +109,20 @@
   /* Barra de filtros sobre el plano */
   #barra-filtros {
     position: absolute; top: 56px; left: 222px; right: 58px; z-index: 2;
-    background: rgba(255,255,255,0.95); border-radius: 8px; padding: 10px 14px;
-    display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+    background: rgba(255,255,255,0.95); border-radius: 8px;
     box-shadow: 0 1px 6px rgba(0,0,0,0.3); font-size: 12px;
   }
+  #pestana-filtros {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 14px; cursor: pointer; font-weight: 600; color: #1b5e20; user-select: none;
+  }
+  #flecha-filtros { transition: transform 0.2s ease; font-size: 10px; }
+  #barra-filtros.colapsada #flecha-filtros { transform: rotate(180deg); }
+  #contenido-filtros {
+    display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+    padding: 0 14px 12px;
+  }
+  #barra-filtros.colapsada #contenido-filtros { display: none; }
   #barra-filtros .campo-filtro { display: flex; flex-direction: column; gap: 3px; }
   #barra-filtros label { color: #555; font-weight: 600; }
   #barra-filtros .rango { display: flex; align-items: center; gap: 4px; }
@@ -238,7 +248,8 @@
 
     /* El mapa, filtros, secciones y leyenda pasan a ocupar todo el ancho */
     #map, #vista-secciones { left: 0; }
-    #barra-filtros { left: 12px; flex-direction: column; align-items: stretch; }
+    #barra-filtros { left: 12px; }
+    #contenido-filtros { flex-direction: column; align-items: stretch; }
     #barra-filtros .campo-slider { width: 100%; }
     #leyenda { left: 12px; }
 
@@ -275,34 +286,37 @@
 <div id="map"></div>
 
 <div id="barra-filtros">
-  <div class="campo-filtro campo-slider">
-    <label>Área (m²)</label>
-    <div class="valores-slider"><span id="valor-area-min">-</span><span id="valor-area-max">-</span></div>
-    <div class="doble-slider">
-      <div class="riel"></div>
-      <input type="range" id="filtro-area-min">
-      <input type="range" id="filtro-area-max">
+  <div id="pestana-filtros">🔍 Filtros <span id="flecha-filtros">▲</span></div>
+  <div id="contenido-filtros">
+    <div class="campo-filtro campo-slider">
+      <label>Área (m²)</label>
+      <div class="valores-slider"><span id="valor-area-min">-</span><span id="valor-area-max">-</span></div>
+      <div class="doble-slider">
+        <div class="riel"></div>
+        <input type="range" id="filtro-area-min">
+        <input type="range" id="filtro-area-max">
+      </div>
     </div>
-  </div>
-  <div class="campo-filtro campo-slider">
-    <label>Precio ($)</label>
-    <div class="valores-slider"><span id="valor-precio-min">-</span><span id="valor-precio-max">-</span></div>
-    <div class="doble-slider">
-      <div class="riel"></div>
-      <input type="range" id="filtro-precio-min">
-      <input type="range" id="filtro-precio-max">
+    <div class="campo-filtro campo-slider">
+      <label>Precio ($)</label>
+      <div class="valores-slider"><span id="valor-precio-min">-</span><span id="valor-precio-max">-</span></div>
+      <div class="doble-slider">
+        <div class="riel"></div>
+        <input type="range" id="filtro-precio-min">
+        <input type="range" id="filtro-precio-max">
+      </div>
     </div>
+    <div class="campo-filtro">
+      <label>Tipo de lote</label>
+      <select id="filtro-tipo"><option value="">Todos</option></select>
+    </div>
+    <div class="campo-filtro">
+      <label>Ubicación</label>
+      <select id="filtro-ubicacion"><option value="">Todas</option></select>
+    </div>
+    <button id="btn-limpiar-filtros">Limpiar filtros</button>
+    <span id="contador-filtro"></span>
   </div>
-  <div class="campo-filtro">
-    <label>Tipo de lote</label>
-    <select id="filtro-tipo"><option value="">Todos</option></select>
-  </div>
-  <div class="campo-filtro">
-    <label>Ubicación</label>
-    <select id="filtro-ubicacion"><option value="">Todas</option></select>
-  </div>
-  <button id="btn-limpiar-filtros">Limpiar filtros</button>
-  <span id="contador-filtro"></span>
 </div>
 
 <div id="vista-secciones">
@@ -753,6 +767,15 @@ function cerrarSidebarMovil() {
 }
 document.getElementById("btn-hamburguesa").addEventListener("click", abrirSidebarMovil);
 fondoOscuro.addEventListener("click", cerrarSidebarMovil);
+
+// ==============================================================
+// PESTAÑA DE FILTROS — colapsable (arranca cerrada en móvil)
+// ==============================================================
+const barraFiltros = document.getElementById("barra-filtros");
+if (window.innerWidth <= 760) barraFiltros.classList.add("colapsada");
+document.getElementById("pestana-filtros").addEventListener("click", () => {
+  barraFiltros.classList.toggle("colapsada");
+});
 
 document.querySelectorAll("#sidebar-izq .item").forEach((item) => {
   item.addEventListener("click", () => {
