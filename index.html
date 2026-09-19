@@ -220,15 +220,6 @@
   #leyenda div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
   #leyenda span.dot { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
 
-  #btn-actualizar-datos {
-    position: absolute; bottom: 24px; right: 12px; z-index: 2;
-    width: 42px; height: 42px; border-radius: 50%; background: white;
-    display: flex; align-items: center; justify-content: center; font-size: 19px;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.35); cursor: pointer;
-  }
-  #btn-actualizar-datos.girando { animation: girar-actualizar 0.8s linear infinite; }
-  @keyframes girar-actualizar { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
   /* Popup del lote (queda solo como hover informativo; el detalle completo va al panel derecho) */
   .maplibregl-popup-content {
     font-size: 13px; padding: 14px 16px; border-radius: 8px;
@@ -541,8 +532,6 @@
   </div>
 
 </div>
-
-<div id="btn-actualizar-datos" title="Actualizar disponibilidad desde Google Sheets">🔄</div>
 
 <div id="leyenda">
   <div><span class="dot" style="background:#66bb6a"></span> Disponible</div>
@@ -1661,13 +1650,7 @@ map.on("load", () => {
   function cargarDatosSheet() {
     if (!CONFIG.sheetCsvUrl) return; // nada que hacer hasta que se complete el link
 
-    const btnActualizar = document.getElementById("btn-actualizar-datos");
-    if (btnActualizar) btnActualizar.classList.add("girando");
-
-    // Se agrega "&_=timestamp" para evitar que el navegador reuse una copia vieja en caché
-    const urlSinCache = CONFIG.sheetCsvUrl + (CONFIG.sheetCsvUrl.includes("?") ? "&" : "?") + "_=" + Date.now();
-
-    Papa.parse(urlSinCache, {
+    Papa.parse(CONFIG.sheetCsvUrl, {
       download: true,
       header: true,
       skipEmptyLines: true,
@@ -1694,17 +1677,12 @@ map.on("load", () => {
         map.setPaintProperty("lotes", "fill-color", expresionColor);
 
         poblarFiltros();
-        if (btnActualizar) btnActualizar.classList.remove("girando");
       },
-      error: (err) => {
-        console.error("Error leyendo el Google Sheets:", err);
-        if (btnActualizar) btnActualizar.classList.remove("girando");
-      }
+      error: (err) => console.error("Error leyendo el Google Sheets:", err)
     });
   }
 
   cargarDatosSheet();
-  document.getElementById("btn-actualizar-datos").addEventListener("click", cargarDatosSheet);
 
   // ------------------------------------------------------------
   // Filtros: área, precio (sliders), tipo, ubicación (dropdowns)
