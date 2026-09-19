@@ -1657,7 +1657,10 @@ map.on("load", () => {
   function cargarDatosSheet() {
     if (!CONFIG.sheetCsvUrl) return; // nada que hacer hasta que se complete el link
 
-    Papa.parse(CONFIG.sheetCsvUrl, {
+    // "&_=timestamp" evita que el navegador reuse una copia vieja del CSV en caché
+    const urlSinCache = CONFIG.sheetCsvUrl + (CONFIG.sheetCsvUrl.includes("?") ? "&" : "?") + "_=" + Date.now();
+
+    Papa.parse(urlSinCache, {
       download: true,
       header: true,
       skipEmptyLines: true,
