@@ -1,0 +1,1927 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Palacio Verde — Visor de Lotes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marzipano@0.10.2/dist/marzipano.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: Arial, sans-serif; }
+  #map { position: absolute; top: 44px; bottom: 0; left: 210px; right: 0; }
+
+  /* Encabezado delgado, solo texto */
+  #encabezado {
+    position: absolute; top: 0; left: 0; right: 0; height: 44px; z-index: 5;
+    background: #ffffff; display: flex; align-items: center; justify-content: center;
+    padding: 0 16px; box-shadow: 0 1px 6px rgba(0,0,0,0.25);
+  }
+  #encabezado .titulo-proyecto { font-size: 13px; font-weight: bold; color: #1b5e20; letter-spacing: 0.5px; }
+
+  /* Barra lateral izquierda */
+  #sidebar-izq {
+    position: absolute; top: 44px; bottom: 0; left: 0; width: 210px; z-index: 4;
+    background: #1c1c1c; overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .sidebar-logo-top { padding: 16px 20px 8px; text-align: center; }
+  .sidebar-logo-top img { max-width: 130px; max-height: 90px; display: inline-block; }
+  .sidebar-logo-bottom { margin-top: auto; padding: 14px 20px; text-align: center; border-top: 1px solid rgba(255,255,255,0.1); }
+  .sidebar-logo-bottom img { max-width: 165px; max-height: 105px; display: inline-block; }
+  #sidebar-izq .item {
+    display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+    color: #cccccc; font-size: 14px; cursor: pointer; border-left: 3px solid transparent;
+  }
+  #sidebar-izq .item:hover { background: rgba(255,255,255,0.06); }
+  #sidebar-izq .item.activo { background: #2e7d32; color: #ffffff; border-left-color: #a5d6a7; }
+  #sidebar-izq .item .icono { font-size: 17px; width: 20px; text-align: center; }
+
+  /* Overlay de secciones que aún no tienen contenido propio */
+  #vista-secciones {
+    position: absolute; top: 44px; bottom: 0; left: 210px; right: 0; z-index: 3;
+    background: #f7f7f7; display: none; overflow-y: auto;
+  }
+  .vista-seccion { display: none; max-width: 760px; margin: 0 auto; padding: 34px 30px 60px; }
+  .vista-seccion.activa { display: block; }
+  .vista-seccion h2 { color: #1b5e20; margin: 0 0 6px; }
+  .vista-seccion .subtitulo { color: #777; font-size: 13px; margin-bottom: 22px; }
+  .tarjeta-info {
+    background: white; border-radius: 8px; padding: 18px 20px; margin-bottom: 16px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.12);
+  }
+  .tarjeta-info h3 { margin: 0 0 8px; color: #1b5e20; font-size: 15px; }
+  .tarjeta-info p { margin: 4px 0; font-size: 13px; color: #444; line-height: 1.5; }
+  .tarjeta-info ul { margin: 6px 0; padding-left: 18px; font-size: 13px; color: #444; }
+  .tarjeta-info a { color: #1565c0; }
+  #mapa-ubicacion { width: 100%; height: 320px; border-radius: 8px; margin-bottom: 16px; }
+  .lista-poi { list-style: none; padding: 0; margin: 10px 0 0; }
+  .lista-poi li { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+  .redes-sociales { display: flex; gap: 14px; margin-top: 10px; }
+  .redes-sociales a { color: #1b5e20; text-decoration: none; font-size: 13px; font-weight: 600; }
+  .badge-modalidad { display:inline-block; background:#e8f5e9; color:#1b5e20; font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; margin-bottom:8px; }
+
+  /* Panel derecho: detalle del lote + cotizador */
+  #panel-derecho {
+    position: absolute; top: 44px; bottom: 0; right: 0; width: 320px; z-index: 6;
+    background: #ffffff; box-shadow: -2px 0 10px rgba(0,0,0,0.25);
+    transform: translateX(100%); transition: transform 0.25s ease;
+    overflow-y: auto; padding: 18px;
+    box-sizing: border-box;
+  }
+  #panel-derecho.abierto { transform: translateX(0); }
+  #panel-derecho .cerrar {
+    position: absolute; top: 10px; right: 14px; font-size: 20px; cursor: pointer; color: #888;
+  }
+  #panel-derecho h2 { margin: 4px 0 2px; font-size: 20px; color: #1b5e20; }
+  #panel-derecho .estado-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px;
+    color: white; margin-bottom: 12px;
+  }
+  .fila-dato { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+  .fila-dato span:first-child { color: #777; }
+  .fila-dato span:last-child { font-weight: 600; }
+
+  #panel-derecho h3 { margin: 18px 0 8px; font-size: 15px; color: #333; border-top: 1px solid #eee; padding-top: 14px; }
+  .toggle-pago { display: flex; gap: 8px; margin-bottom: 12px; }
+  .toggle-pago button {
+    flex: 1; padding: 8px; border: 1px solid #2e7d32; background: white; color: #2e7d32;
+    border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .toggle-pago button.activo { background: #2e7d32; color: white; }
+
+  .campo-cotizador { margin-bottom: 10px; }
+  .campo-cotizador label { display: block; font-size: 12px; color: #666; margin-bottom: 3px; }
+  .campo-cotizador input {
+    width: 100%; box-sizing: border-box; padding: 7px 8px; border: 1px solid #ccc;
+    border-radius: 5px; font-size: 13px;
+  }
+  .resultado-fila {
+    display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px;
+  }
+  .resultado-fila.destacado {
+    background: #e8f5e9; margin-top: 6px; padding: 10px; border-radius: 6px;
+    font-weight: bold; font-size: 15px; color: #1b5e20;
+  }
+  #check-interes-contenedor { font-size: 12px; color: #666; margin: 8px 0; display: none; }
+
+  /* Barra de filtros sobre el plano */
+  #barra-filtros {
+    position: absolute; top: 56px; left: 222px; right: 58px; z-index: 2;
+    background: rgba(255,255,255,0.95); border-radius: 8px; padding: 10px 14px;
+    display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.3); font-size: 12px;
+  }
+  #barra-filtros .campo-filtro { display: flex; flex-direction: column; gap: 3px; }
+  #barra-filtros label { color: #555; font-weight: 600; }
+  #barra-filtros .rango { display: flex; align-items: center; gap: 4px; }
+  #barra-filtros input[type="number"] { width: 72px; padding: 5px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+  #barra-filtros select { padding: 5px 6px; border: 1px solid #ccc; border-radius: 4px; max-width: 140px; }
+  #barra-filtros .campo-slider { width: 170px; }
+  #barra-filtros .campo-slider .valores-slider { display: flex; justify-content: space-between; color: #333; font-weight: 600; margin-bottom: 2px; }
+  #barra-filtros .doble-slider { position: relative; height: 22px; }
+  #barra-filtros .doble-slider input[type="range"] {
+    position: absolute; width: 100%; top: 7px; margin: 0; pointer-events: none;
+    -webkit-appearance: none; background: transparent;
+  }
+  #barra-filtros .doble-slider input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; pointer-events: auto; width: 14px; height: 14px; border-radius: 50%;
+    background: #2e7d32; cursor: pointer; border: 2px solid white; box-shadow: 0 0 2px rgba(0,0,0,0.5);
+  }
+  #barra-filtros .doble-slider input[type="range"]::-moz-range-thumb {
+    pointer-events: auto; width: 14px; height: 14px; border-radius: 50%;
+    background: #2e7d32; cursor: pointer; border: 2px solid white;
+  }
+  #barra-filtros .doble-slider .riel { position: absolute; top: 9px; left: 0; right: 0; height: 4px; background: #ddd; border-radius: 2px; }
+  #barra-filtros button {
+    padding: 6px 12px; border: 1px solid #999; background: white; border-radius: 5px;
+    cursor: pointer; font-size: 12px; color: #555;
+  }
+  #contador-filtro { margin-left: auto; font-weight: bold; color: #1b5e20; align-self: center; }
+
+  /* Marcador de recorrido 360° (tipo "ojo") con pulso animado */
+  .marcador-360 {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: #ffffff; border: 2px solid #0288d1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; cursor: pointer; box-shadow: 0 1px 5px rgba(0,0,0,0.5);
+    position: relative;
+    will-change: transform; /* ayuda al navegador a seguir el zoom sin tirones */
+  }
+  .marcador-360.pulso::before {
+    content: ""; position: absolute; top: -6px; left: -6px; right: -6px; bottom: -6px;
+    border-radius: 50%; border: 2px solid #0288d1;
+    animation: pulso360 1.6s ease-out infinite;
+  }
+  @keyframes pulso360 {
+    0%   { transform: scale(0.8); opacity: 0.9; }
+    100% { transform: scale(1.7); opacity: 0; }
+  }
+
+  /* Panel del visor 360° — tarjeta flotante compacta */
+  #modal-360 {
+    position: absolute; bottom: 20px; right: 20px; width: 480px; height: 320px; z-index: 20;
+    background: #000; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    border-radius: 10px; overflow: hidden;
+  }
+  /* Modo pantalla completa (dentro del área del plano, no del navegador) */
+  #modal-360.completo {
+    top: 44px; left: 210px; right: 0; bottom: 0; width: auto; height: auto; border-radius: 0;
+  }
+  #modal-360 .pano { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+  #modal-360 .cerrar-360 {
+    position: absolute; top: 14px; right: 14px; z-index: 21;
+    width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.6);
+    color: white; font-size: 18px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border: 2px solid white;
+  }
+  #modal-360 .pantalla-completa-btn {
+    position: absolute; top: 14px; right: 58px; z-index: 21;
+    width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.6);
+    color: white; font-size: 16px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border: 2px solid white;
+  }
+  #modal-360 .titulo-360 {
+    position: absolute; top: 14px; left: 14px; z-index: 21;
+    background: rgba(0,0,0,0.6); color: white; padding: 7px 14px; border-radius: 20px; font-size: 13px;
+    max-width: 260px;
+  }
+  #modal-360 .nav-360 {
+    position: absolute; bottom: 18px; left: 0; right: 0; z-index: 21;
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+  }
+  #modal-360 .nav-360 button {
+    width: 40px; height: 40px; border-radius: 50%; border: 2px solid white;
+    background: rgba(0,0,0,0.6); color: white; font-size: 18px; cursor: pointer;
+  }
+  #modal-360 .nav-360 .contador {
+    background: rgba(0,0,0,0.6); color: white; padding: 6px 14px; border-radius: 20px; font-size: 13px;
+  }
+
+  /* Leyenda simple */
+  #leyenda {
+    position: absolute; bottom: 24px; left: 222px; z-index: 2;
+    background: rgba(255,255,255,0.92); padding: 10px 14px; border-radius: 8px;
+    font-size: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  #leyenda div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  #leyenda span.dot { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+
+  /* Popup del lote (queda solo como hover informativo; el detalle completo va al panel derecho) */
+  .maplibregl-popup-content {
+    font-size: 13px; padding: 14px 16px; border-radius: 8px;
+  }
+  .popup-titulo { font-size: 15px; font-weight: bold; margin-bottom: 6px; }
+  .popup-fila { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+  .popup-fila span:first-child { color: #666; }
+</style>
+</head>
+<body>
+
+<div id="encabezado">
+  <div class="titulo-proyecto">PALACIO VERDE</div>
+</div>
+
+<div id="sidebar-izq">
+  <div class="sidebar-logo-top"><img src="logo_proyecto.png" alt="Palacio Verde" /></div>
+  <div class="item activo" data-seccion="plano"><span class="icono">🗺️</span> Plano interactivo 360</div>
+  <div class="item" data-seccion="ubicacion"><span class="icono">📍</span> Ubicación</div>
+  <div class="item" data-seccion="financiamiento"><span class="icono">💰</span> Financiamiento</div>
+  <div class="item" data-seccion="documentacion"><span class="icono">📄</span> Documentación</div>
+  <div class="item" data-seccion="contacto"><span class="icono">📞</span> Contacto</div>
+  <div class="sidebar-logo-bottom"><img src="logo_empresa.png" alt="Infinity Group MB" /></div>
+</div>
+
+<div id="map"></div>
+
+<div id="barra-filtros">
+  <div class="campo-filtro campo-slider">
+    <label>Área (m²)</label>
+    <div class="valores-slider"><span id="valor-area-min">-</span><span id="valor-area-max">-</span></div>
+    <div class="doble-slider">
+      <div class="riel"></div>
+      <input type="range" id="filtro-area-min">
+      <input type="range" id="filtro-area-max">
+    </div>
+  </div>
+  <div class="campo-filtro campo-slider">
+    <label>Precio ($)</label>
+    <div class="valores-slider"><span id="valor-precio-min">-</span><span id="valor-precio-max">-</span></div>
+    <div class="doble-slider">
+      <div class="riel"></div>
+      <input type="range" id="filtro-precio-min">
+      <input type="range" id="filtro-precio-max">
+    </div>
+  </div>
+  <div class="campo-filtro">
+    <label>Tipo de lote</label>
+    <select id="filtro-tipo"><option value="">Todos</option></select>
+  </div>
+  <div class="campo-filtro">
+    <label>Ubicación</label>
+    <select id="filtro-ubicacion"><option value="">Todas</option></select>
+  </div>
+  <button id="btn-limpiar-filtros">Limpiar filtros</button>
+  <span id="contador-filtro"></span>
+</div>
+
+<div id="vista-secciones">
+
+  <div class="vista-seccion" id="seccion-ubicacion">
+    <h2>Ubicación</h2>
+    <div class="subtitulo">A 27 minutos desde la Plaza de Armas de Huaral</div>
+    <iframe id="mapa-ubicacion"
+      src="https://www.google.com/maps?saddr=-11.4953927,-77.2071528&daddr=-11.42925,-77.2587222&output=embed"
+      style="border:0;" allowfullscreen loading="lazy"></iframe>
+    <div class="tarjeta-info">
+      <h3>Puntos de referencia</h3>
+      <ul class="lista-poi">
+        <li><span>📍 Palacio Verde</span> <a href="https://maps.app.goo.gl/dYtQLoQctFWhVg7WA" target="_blank">Ver en Google Maps</a></li>
+        <li><span>🍽️ El Fogón de Huaral</span> <a href="https://maps.app.goo.gl/VUxdSccmD77TBz8D6" target="_blank">Ver en Google Maps</a></li>
+        <li><span>↪️ Desvío Huacho Chico</span> <a href="https://maps.app.goo.gl/x7mkoyVJWtP5ufYZ8" target="_blank">Ver en Google Maps</a></li>
+        <li><span>🏛️ Plaza de Armas de Huaral</span> <a href="https://maps.app.goo.gl/AahqyfdQZhDB8NGaA" target="_blank">Ver ruta (27 min)</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="vista-seccion" id="seccion-financiamiento" style="max-width:920px;">
+    <h2>Financiamiento</h2>
+    <div class="subtitulo">Selecciona un lote para simular su cotización con cualquiera de las 3 modalidades</div>
+
+    <div class="tarjeta-info">
+      <div style="display:flex; gap:14px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:160px;">
+          <label style="font-size:12px; font-weight:600; color:#555;">🔍 Manzana</label>
+          <input type="text" id="fin-buscar-mz" list="fin-datalist-mz" placeholder="Escribe o elige la manzana" autocomplete="off"
+            style="width:100%; padding:9px; margin-top:5px; border:1px solid #ccc; border-radius:5px; font-size:13px; box-sizing:border-box;">
+          <datalist id="fin-datalist-mz"></datalist>
+        </div>
+        <div style="flex:1; min-width:160px;">
+          <label style="font-size:12px; font-weight:600; color:#555;">🔍 N° de lote</label>
+          <input type="text" id="fin-buscar-lote-n" list="fin-datalist-lote-n" placeholder="Elige la manzana primero" autocomplete="off" disabled
+            style="width:100%; padding:9px; margin-top:5px; border:1px solid #ccc; border-radius:5px; font-size:13px; box-sizing:border-box;">
+          <datalist id="fin-datalist-lote-n"></datalist>
+        </div>
+      </div>
+    </div>
+
+    <div id="fin-contenido" style="display:none;">
+
+      <div class="tarjeta-info" style="display:flex; gap:30px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:220px;">
+          <div style="display:flex; justify-content:space-between; font-size:13px; padding:5px 0;"><span style="color:#777;">Manzana</span><span id="fin-dato-mz" style="font-weight:600;"></span></div>
+          <div style="display:flex; justify-content:space-between; font-size:13px; padding:5px 0;"><span style="color:#777;">Área</span><span id="fin-dato-area" style="font-weight:600;"></span></div>
+          <div style="display:flex; justify-content:space-between; font-size:13px; padding:5px 0;"><span style="color:#777;">Estado</span><span id="fin-dato-estado" style="font-weight:600;"></span></div>
+          <div style="display:flex; justify-content:space-between; font-size:13px; padding:5px 0;"><span style="color:#777;">Precio de lista</span><span id="fin-dato-precio-lista" style="font-weight:600;"></span></div>
+        </div>
+        <div style="flex:1; min-width:220px;">
+          <label style="font-size:12px; font-weight:600; color:#555;">Moneda</label>
+          <div style="display:flex; gap:8px; margin-top:5px;">
+            <select id="fin-moneda" style="flex:1; padding:8px; border:1px solid #ccc; border-radius:5px;">
+              <option value="USD">Dólares (US$)</option>
+              <option value="PEN">Soles (S/)</option>
+            </select>
+            <input type="number" id="fin-tipo-cambio" value="3.75" step="0.01" min="0" style="width:80px; padding:8px; border:1px solid #ccc; border-radius:5px;" disabled>
+          </div>
+          <label style="font-size:12px; font-weight:600; color:#555; display:block; margin-top:12px;" id="fin-label-descuento">Descuento (%)</label>
+          <div style="display:flex; gap:8px; margin-top:5px;">
+            <input type="number" id="fin-input-descuento" value="0" min="0" step="0.5" style="flex:1; padding:8px; border:1px solid #ccc; border-radius:5px;">
+            <div class="toggle-pago" style="width:auto; margin:0;">
+              <button id="fin-btn-desc-porc" class="activo" style="padding:8px 12px;">%</button>
+              <button id="fin-btn-desc-monto" style="padding:8px 12px;">$</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tarjeta-info" style="text-align:center; background:#e8f5e9;">
+        <span style="font-size:13px; color:#555;">Precio de cierre</span><br>
+        <span id="fin-out-precio-cierre" style="font-size:24px; font-weight:bold; color:#1b5e20;">-</span>
+      </div>
+
+      <div class="tarjeta-info">
+        <div class="toggle-pago" style="max-width:420px; margin:0 auto 18px;">
+          <button id="fin-btn-contado" class="activo">Contado</button>
+          <button id="fin-btn-credicontado">Credicontado</button>
+          <button id="fin-btn-financiado">Financiado</button>
+        </div>
+
+        <div id="fin-campos-financiado" style="display:none;">
+          <div style="display:flex; gap:24px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:160px;">
+              <label id="fin-label-inicial" style="font-size:12px; font-weight:600; color:#555;">Inicial ($)</label>
+              <input type="number" id="fin-input-inicial" value="0" min="0" style="width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:5px;">
+              <span id="fin-aviso-inicial-minima" style="color:#c62828; font-size:11px; display:none;">Mínimo 30% del precio de cierre en Credicontado</span>
+            </div>
+            <div style="flex:1; min-width:160px;">
+              <label id="fin-label-cuotas" style="font-size:12px; font-weight:600; color:#555;">Número de cuotas</label>
+              <input type="number" id="fin-input-cuotas" value="12" min="1" style="width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:5px;">
+              <span id="fin-aviso-cuotas-max" style="color:#c62828; font-size:11px; display:none;">Máximo 12 cuotas en Credicontado</span>
+            </div>
+            <div style="flex:1; min-width:160px; display:none;" id="fin-campo-tasa-interes">
+              <label style="font-size:12px; font-weight:600; color:#555;">Tasa nominal anual (%)</label>
+              <input type="number" id="fin-input-tasa-interes" value="10" min="0" step="0.1" style="width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:5px;">
+            </div>
+            <div style="flex:1; min-width:160px; display:none;" id="fin-campo-fecha-inicio">
+              <label style="font-size:12px; font-weight:600; color:#555;">Fecha de pago de la inicial</label>
+              <input type="date" id="fin-input-fecha-inicio" style="width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:5px;">
+            </div>
+          </div>
+
+          <div style="display:flex; gap:24px; margin-top:16px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:200px; background:#f5f5f5; border-radius:6px; padding:12px; text-align:center;">
+              <span style="font-size:12px; color:#777;">Monto a financiar</span><br>
+              <span id="fin-out-monto-financiar" style="font-size:17px; font-weight:bold; color:#333;">-</span>
+            </div>
+            <div style="flex:1; min-width:200px; background:#e8f5e9; border-radius:6px; padding:12px; text-align:center;">
+              <span style="font-size:12px; color:#1b5e20;">Cuota mensual</span><br>
+              <span id="fin-out-cuota-mensual" style="font-size:17px; font-weight:bold; color:#1b5e20;">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tarjeta-info" id="fin-contenedor-cronograma" style="display:none;">
+        <h3 style="margin-top:0;">Cronograma de pagos</h3>
+        <div style="max-height:420px; overflow-y:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:12px;">
+            <thead style="position:sticky; top:0; background:#e8f5e9; color:#1b5e20;">
+              <tr>
+                <th style="padding:8px; text-align:center;">Cuota</th><th style="padding:8px;">Fecha</th>
+                <th style="padding:8px; text-align:right;">Interés</th><th style="padding:8px; text-align:right;">Amortización</th>
+                <th style="padding:8px; text-align:right;">Cuota total</th><th style="padding:8px; text-align:right;">Saldo</th>
+              </tr>
+            </thead>
+            <tbody id="fin-cuerpo-cronograma"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="vista-seccion" id="seccion-documentacion">
+    <h2>Documentación</h2>
+    <div class="subtitulo">Documentos del proyecto</div>
+    <div class="tarjeta-info">
+      <p>Toda la documentación del proyecto (memoria descriptiva, factibilidad de servicios, brochure, y demás) está disponible en la siguiente carpeta:</p>
+      <a href="https://drive.google.com/drive/folders/1-3hKP3GEzMuGvSNplg2kadoMXWGzIftp?usp=sharing" target="_blank"
+         style="display:inline-block; margin-top:10px; background:#1b5e20; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">
+        📁 Ver documentos del proyecto
+      </a>
+    </div>
+  </div>
+
+  <div class="vista-seccion" id="seccion-contacto">
+    <h2>Contacto</h2>
+
+    <div class="tarjeta-info">
+      <h3>Contáctanos</h3>
+      <p style="margin-bottom:14px;">Déjanos tus datos y un asesor se comunicará contigo.</p>
+      <form id="form-contacto">
+        <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:12px;">
+          <div style="flex:1; min-width:200px;">
+            <label style="font-size:12px; font-weight:600; color:#555;">Nombre completo</label>
+            <input type="text" id="contacto-nombre" required style="width:100%; padding:9px; margin-top:5px; border:1px solid #ccc; border-radius:5px; font-size:13px; box-sizing:border-box;">
+          </div>
+          <div style="flex:1; min-width:200px;">
+            <label style="font-size:12px; font-weight:600; color:#555;">Teléfono</label>
+            <input type="tel" id="contacto-telefono" required style="width:100%; padding:9px; margin-top:5px; border:1px solid #ccc; border-radius:5px; font-size:13px; box-sizing:border-box;">
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px; font-weight:600; color:#555;">Correo electrónico</label>
+          <input type="email" id="contacto-correo" required style="width:100%; padding:9px; margin-top:5px; border:1px solid #ccc; border-radius:5px; font-size:13px; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px; font-weight:600; color:#555;">Lote de interés (opcional)</label>
+          <input type="text" id="contacto-lote" placeholder="Ej. A - 1" style="width:100%; padding:9px; margin-top:5px; border:1px solid #ccc; border-radius:5px; font-size:13px; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:12px; font-weight:600; color:#555;">Mensaje</label>
+          <textarea id="contacto-mensaje" rows="4" style="width:100%; padding:9px; margin-top:5px; border:1px solid #ccc; border-radius:5px; font-size:13px; box-sizing:border-box; font-family:inherit;"></textarea>
+        </div>
+        <button type="submit" style="background:#1b5e20; color:white; border:none; padding:11px 22px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;">
+          Enviar mensaje
+        </button>
+      </form>
+    </div>
+
+    <div class="tarjeta-info">
+      <h3>Infinity Group MB</h3>
+      <p>🏡 Desarrolladora de proyectos inmobiliarios</p>
+      <p>🌿 Casas de campo e inversión industrial</p>
+      <p>📍 Av. Alfredo Mendiola #267, San Martín de Porres</p>
+      <p>📞 <a href="tel:920267313">920 267 313</a></p>
+      <div class="redes-sociales">
+        <a href="https://www.instagram.com/infinity.groupmb/" target="_blank">Instagram</a>
+        <a href="https://www.tiktok.com/@infinity.group.mb" target="_blank">TikTok</a>
+        <a href="https://www.facebook.com/profile.php?id=61588248958184" target="_blank">Facebook</a>
+      </div>
+    </div>
+    <div class="tarjeta-info">
+      <h3>Proyectos</h3>
+      <ul>
+        <li>Palacio Verde – Huaral</li>
+        <li>Residencial Los Sauces – Huaral</li>
+        <li>Hectáreas KM 98</li>
+        <li>Lotes Industriales KM 101</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<div id="leyenda">
+  <div><span class="dot" style="background:#66bb6a"></span> Disponible</div>
+  <div><span class="dot" style="background:#ef5350"></span> Vendido</div>
+  <div><span class="dot" style="background:#1976d2"></span> Separado</div>
+  <div><span class="dot" style="background:#424242"></span> Bloqueado</div>
+  <div><span class="dot" style="background:#fdd835"></span> Vereda</div>
+</div>
+
+<div id="panel-derecho">
+  <span class="cerrar" id="cerrar-panel">✕</span>
+  <h2 id="panel-titulo">Lote</h2>
+  <span class="estado-badge" id="panel-estado-badge"></span>
+
+  <div class="fila-dato"><span>Manzana</span><span id="dato-mz"></span></div>
+  <div class="fila-dato"><span>Área</span><span id="dato-area"></span></div>
+  <div class="fila-dato"><span>Ubicación</span><span id="dato-ubicacion"></span></div>
+  <div class="fila-dato"><span>Tipo</span><span id="dato-tipo"></span></div>
+  <div class="fila-dato"><span>Precio de lista</span><span id="dato-precio-lista"></span></div>
+
+  <h3 style="margin-top:14px;">Linderos</h3>
+  <div class="fila-dato"><span>Frontis</span><span id="dato-frontis"></span></div>
+  <div class="fila-dato"><span>Posterior</span><span id="dato-posterior"></span></div>
+  <div class="fila-dato"><span>Izquierdo</span><span id="dato-izquierdo"></span></div>
+  <div class="fila-dato"><span>Derecho</span><span id="dato-derecho"></span></div>
+  <div class="fila-dato" id="fila-adicional1" style="display:none"><span id="etiqueta-adicional1">Adicional 1</span><span id="dato-adicional1"></span></div>
+  <div class="fila-dato" id="fila-adicional2" style="display:none"><span id="etiqueta-adicional2">Adicional 2</span><span id="dato-adicional2"></span></div>
+
+  <h3>Cotizador</h3>
+
+  <div class="campo-cotizador">
+    <label>Moneda</label>
+    <div style="display:flex; gap:6px; align-items:center;">
+      <select id="filtro-moneda" style="flex:1;">
+        <option value="USD">Dólares (US$)</option>
+        <option value="PEN">Soles (S/)</option>
+      </select>
+      <input type="number" id="input-tipo-cambio" value="3.75" step="0.01" min="0" style="width:70px;" title="Tipo de cambio (S/ por US$)" disabled>
+    </div>
+  </div>
+
+  <div class="toggle-pago" style="flex-wrap:wrap;">
+    <button id="btn-contado" class="activo">Contado</button>
+    <button id="btn-credicontado">Credicontado</button>
+    <button id="btn-financiado">Financiado</button>
+  </div>
+
+  <div class="campo-cotizador">
+    <label id="label-descuento">Descuento (%)</label>
+    <div style="display:flex; gap:6px;">
+      <input type="number" id="input-descuento" value="0" min="0" step="0.5" style="flex:1;">
+      <div id="toggle-tipo-descuento" class="toggle-pago" style="width:auto; margin:0;">
+        <button id="btn-desc-porc" class="activo" style="padding:7px 10px;">%</button>
+        <button id="btn-desc-monto" style="padding:7px 10px;">$</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="resultado-fila">
+    <span>Precio de cierre</span>
+    <span id="out-precio-cierre">-</span>
+  </div>
+
+  <div id="campos-financiado" style="display:none">
+    <div class="campo-cotizador">
+      <label id="label-inicial">Inicial ($)</label>
+      <input type="number" id="input-inicial" value="0" min="0">
+      <span id="aviso-inicial-minima" style="color:#c62828; font-size:10px; display:none;">Mínimo 30% del precio de cierre en Credicontado</span>
+    </div>
+    <div class="campo-cotizador">
+      <label id="label-cuotas">Número de cuotas</label>
+      <input type="number" id="input-cuotas" value="12" min="1">
+      <span id="aviso-cuotas-max" style="color:#c62828; font-size:10px; display:none;">Máximo 12 cuotas en Credicontado</span>
+    </div>
+
+    <div class="campo-cotizador" id="campo-tasa-interes" style="display:none">
+      <label>Tasa nominal anual (%)</label>
+      <input type="number" id="input-tasa-interes" value="10" min="0" step="0.1">
+    </div>
+
+    <div class="campo-cotizador" id="campo-fecha-inicio" style="display:none">
+      <label>Fecha de pago de la inicial</label>
+      <input type="date" id="input-fecha-inicio">
+    </div>
+
+    <div class="resultado-fila"><span>Monto a financiar</span><span id="out-monto-financiar">-</span></div>
+    <div class="resultado-fila destacado"><span>Cuota mensual</span><span id="out-cuota-mensual">-</span></div>
+
+    <div id="contenedor-cronograma" style="display:none; margin-top:10px;">
+      <div style="font-size:12px; font-weight:600; color:#333; margin-bottom:4px;">Cronograma de pagos</div>
+      <div style="max-height:180px; overflow-y:auto; border:1px solid #e0e0e0; border-radius:5px;">
+        <table style="width:100%; border-collapse:collapse; font-size:10px;">
+          <thead style="position:sticky; top:0; background:#f0f0f0;">
+            <tr>
+              <th style="padding:4px;">Cuota</th><th style="padding:4px;">Fecha</th>
+              <th style="padding:4px;">Interés</th><th style="padding:4px;">Amort.</th>
+              <th style="padding:4px;">Cuota</th><th style="padding:4px;">Saldo</th>
+            </tr>
+          </thead>
+          <tbody id="cuerpo-cronograma"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <button id="btn-descargar-pdf" style="width:100%; margin-top:16px; padding:11px; background:#1b5e20; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;">
+    ⬇ Descargar cotización (PDF)
+  </button>
+  <div id="estado-pdf" style="text-align:center; font-size:11px; color:#888; margin-top:6px;"></div>
+</div>
+
+<div id="modal-360">
+  <div class="cerrar-360" id="cerrar-360">✕</div>
+  <div class="pantalla-completa-btn" id="btn-pantalla-completa">⛶</div>
+  <div class="titulo-360" id="titulo-360"></div>
+  <div class="pano" id="pano"></div>
+  <div class="nav-360">
+    <button id="tour-anterior">‹</button>
+    <span class="contador" id="tour-contador"></span>
+    <button id="tour-siguiente">›</button>
+  </div>
+</div>
+
+<script>
+// ==============================================================
+// CONFIGURACIÓN DEL PROYECTO — esto es lo único que cambiaría
+// si reutilizas esta misma plantilla para OTRO proyecto
+// ==============================================================
+const CONFIG = {
+  archivoPlano: "PALACIO_VERDE_clasificado.geojson",
+  centro: [-77.2577, -11.4293],
+  zoomInicial: 16.5,
+  // Pega aquí el link "Publicar en la web" en formato CSV de tu Google Sheets
+  // (pestaña PALACIO VERDE). Mientras esté vacío, los lotes usan el color temporal.
+  sheetCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vToNOj5aw_dbSo2gknEyvZftRrlm0-M0eu0oob-FdofgxN8D_lcfyS0OYN4ydTHO58UvsxrEJBhwMA0/pub?gid=0&single=true&output=csv",
+
+  // Correo donde llegan los mensajes del formulario de Contacto
+  correoContacto: "janir010287@gmail.com",
+
+  // --- Cotizador ---
+  // Modalidades: Contado, Credicontado (sin interés, inicial mín. 30%, máx. 12 cuotas),
+  // Financiado (con interés, tasa editable por el asesor, sin límite de cuotas fijo aquí).
+  tasaInteresAnualDefecto: 10, // % nominal anual, editable por el asesor en el panel
+
+  // Tipo de descuento: "porcentaje" (ej. 10%) o "monto" (ej. $1,000 fijo).
+  // Si permitirElegirTipoDescuento = false, el cotizador queda BLOQUEADO
+  // al valor de tipoDescuentoPorDefecto (el asesor no ve ningún interruptor).
+  // Si es true, aparece un interruptor %  /  $ para que el asesor elija.
+  permitirElegirTipoDescuento: true,
+  tipoDescuentoPorDefecto: "monto", // "porcentaje" | "monto"
+
+  // Animación pulsante en los marcadores de recorrido 360° (para llamar la atención)
+  animarMarcadores360: true
+};
+
+// ==============================================================
+// MAPA BASE: satelital gratuito de Esri (sin API key)
+// ==============================================================
+const map = new maplibregl.Map({
+  container: "map",
+  style: {
+    version: 8,
+    glyphs: "https://cdn.jsdelivr.net/gh/kylebarron/openmaptiles-fonts/fonts/{fontstack}/{range}.pbf", // fuente de letras (mirror confiable, sin alertas de seguridad)
+    sources: {
+      "esri-satelital": {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        ],
+        tileSize: 256,
+        maxzoom: 17, // Esri no tiene imagen de alta resolución más allá de esto en zonas rurales;
+                     // así el mapa estira la última imagen disponible en vez de mostrar "no disponible"
+        attribution: "Esri, Maxar, Earthstar Geographics"
+      }
+    },
+    layers: [
+      { id: "esri-satelital-layer", type: "raster", source: "esri-satelital" }
+    ]
+  },
+  center: CONFIG.centro,
+  zoom: CONFIG.zoomInicial,
+  pitch: 0,        // arranca plano, pero ahora sí se puede inclinar (ver control 3D abajo)
+  maxPitch: 70,     // permite girar/inclinar la vista en 3D
+  preserveDrawingBuffer: true // necesario para poder capturar el mapa como imagen (cotización en PDF)
+});
+
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+
+// ==============================================================
+// FORMULARIO DE CONTACTO — arma un correo prellenado (sin backend)
+// ==============================================================
+document.getElementById("form-contacto").addEventListener("submit", (e) => {
+  e.preventDefault();
+
+  const nombre = document.getElementById("contacto-nombre").value;
+  const telefono = document.getElementById("contacto-telefono").value;
+  const correo = document.getElementById("contacto-correo").value;
+  const lote = document.getElementById("contacto-lote").value;
+  const mensaje = document.getElementById("contacto-mensaje").value;
+
+  const asunto = "Consulta desde el visor Palacio Verde" + (lote ? " — Lote " + lote : "");
+  const cuerpo =
+    "Nombre: " + nombre + "\n" +
+    "Teléfono: " + telefono + "\n" +
+    "Correo: " + correo + "\n" +
+    (lote ? "Lote de interés: " + lote + "\n" : "") +
+    "\nMensaje:\n" + (mensaje || "(sin mensaje)");
+
+  const mailto = "mailto:" + CONFIG.correoContacto
+    + "?subject=" + encodeURIComponent(asunto)
+    + "&body=" + encodeURIComponent(cuerpo);
+
+  window.location.href = mailto;
+});
+
+// ==============================================================
+// BARRA LATERAL IZQUIERDA — navegación entre secciones
+// ==============================================================
+const nombresSeccion = {
+  plano: "Plano interactivo 360",
+  ubicacion: "Ubicación",
+  financiamiento: "Financiamiento",
+  documentacion: "Documentación",
+  contacto: "Contacto"
+};
+
+document.querySelectorAll("#sidebar-izq .item").forEach((item) => {
+  item.addEventListener("click", () => {
+    document.querySelectorAll("#sidebar-izq .item").forEach((i) => i.classList.remove("activo"));
+    item.classList.add("activo");
+
+    const seccion = item.dataset.seccion;
+    const vistaSecciones = document.getElementById("vista-secciones");
+
+    if (seccion === "plano") {
+      vistaSecciones.style.display = "none";
+      return;
+    }
+
+    vistaSecciones.style.display = "block";
+    document.querySelectorAll(".vista-seccion").forEach((s) => s.classList.remove("activa"));
+    document.getElementById("seccion-" + seccion).classList.add("activa");
+  });
+});
+
+// ==============================================================
+// PANEL DERECHO — detalle del lote + cotizador
+// ==============================================================
+const panelDerecho = document.getElementById("panel-derecho");
+document.getElementById("cerrar-panel").addEventListener("click", () => {
+  panelDerecho.classList.remove("abierto");
+  if (map.getLayer("lote-seleccionado")) {
+    map.setFilter("lote-seleccionado", ["==", ["get", "id_lote"], "__ninguno__"]);
+  }
+});
+
+let loteActual = null; // guarda la fila del Sheets del lote seleccionado
+let idLoteAbierto = null; // guarda el código del lote actualmente abierto (para el PDF)
+let modoDescuento = CONFIG.tipoDescuentoPorDefecto; // "porcentaje" | "monto"
+
+// Si el desarrollador bloqueó la elección, se oculta el interruptor
+// y el cotizador queda fijo en el modo configurado.
+if (!CONFIG.permitirElegirTipoDescuento) {
+  document.getElementById("toggle-tipo-descuento").style.display = "none";
+}
+
+function actualizarModoDescuentoUI() {
+  const esMonto = modoDescuento === "monto";
+  const simbolo = simboloMoneda("filtro-moneda");
+  document.getElementById("btn-desc-porc").classList.toggle("activo", !esMonto);
+  document.getElementById("btn-desc-monto").classList.toggle("activo", esMonto);
+  document.getElementById("btn-desc-monto").textContent = simbolo;
+  document.getElementById("label-descuento").textContent = esMonto ? ("Descuento (" + simbolo + ")") : "Descuento (%)";
+  const input = document.getElementById("input-descuento");
+  if (esMonto) {
+    input.removeAttribute("max");
+  } else {
+    input.setAttribute("max", "100");
+  }
+}
+actualizarModoDescuentoUI();
+
+document.getElementById("btn-desc-porc").addEventListener("click", () => {
+  modoDescuento = "porcentaje";
+  actualizarModoDescuentoUI();
+  calcularCotizacion();
+});
+document.getElementById("btn-desc-monto").addEventListener("click", () => {
+  modoDescuento = "monto";
+  actualizarModoDescuentoUI();
+  calcularCotizacion();
+});
+
+function limpiarMoneda(texto) {
+  if (!texto) return 0;
+  return parseFloat(String(texto).replace(/[^0-9.-]/g, "")) || 0;
+}
+
+// Los montos del Sheets están en USD. formatoMoneda los muestra en la
+// moneda que el asesor elija, convirtiendo con el tipo de cambio ingresado.
+// idMoneda/idTipoCambio permiten reusar esta función en distintos cotizadores.
+function formatoMoneda(numeroUSD, idMoneda = "filtro-moneda", idTipoCambio = "input-tipo-cambio") {
+  const moneda = document.getElementById(idMoneda).value;
+  const tc = parseFloat(document.getElementById(idTipoCambio).value) || 1;
+  const monto = moneda === "PEN" ? numeroUSD * tc : numeroUSD;
+  const simbolo = moneda === "PEN" ? "S/ " : "$";
+  return simbolo + monto.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function simboloMoneda(idMoneda = "filtro-moneda") {
+  return document.getElementById(idMoneda).value === "PEN" ? "S/" : "$";
+}
+
+// Convierte un valor que el asesor escribió en la moneda visible (S/ o $)
+// de vuelta a USD, que es la moneda base de todos los cálculos internos.
+function aUSD(valorEnMonedaActual, idMoneda = "filtro-moneda", idTipoCambio = "input-tipo-cambio") {
+  const moneda = document.getElementById(idMoneda).value;
+  const tc = parseFloat(document.getElementById(idTipoCambio).value) || 1;
+  return moneda === "PEN" ? valorEnMonedaActual / tc : valorEnMonedaActual;
+}
+
+document.getElementById("filtro-moneda").addEventListener("change", () => {
+  document.getElementById("input-tipo-cambio").disabled = document.getElementById("filtro-moneda").value === "USD";
+  actualizarModoDescuentoUI();
+  seleccionarModoPago(obtenerModoPago());
+});
+document.getElementById("input-tipo-cambio").addEventListener("input", calcularCotizacion);
+
+function obtenerModoPago() {
+  if (document.getElementById("btn-credicontado").classList.contains("activo")) return "credicontado";
+  if (document.getElementById("btn-financiado").classList.contains("activo")) return "financiado";
+  return "contado";
+}
+
+// Suma "n" meses a una fecha respetando el día original (con tope al
+// último día del mes de destino) — ej: 31 ene + 1 mes = 28/29 feb,
+// pero 31 ene + 2 meses = 31 mar (no arrastra el recorte de febrero).
+function sumarMeses(fechaBase, n) {
+  const diaObjetivo = fechaBase.getDate();
+  const resultado = new Date(fechaBase.getFullYear(), fechaBase.getMonth() + n, 1);
+  const ultimoDiaMes = new Date(resultado.getFullYear(), resultado.getMonth() + 1, 0).getDate();
+  resultado.setDate(Math.min(diaObjetivo, ultimoDiaMes));
+  return resultado;
+}
+
+function formatoFecha(fecha) {
+  return fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function calcularCotizacion() {
+  if (!loteActual) return;
+
+  const modo = obtenerModoPago();
+
+  const precioLista = limpiarMoneda(loteActual["PRECIO DE VENTA"] || loteActual["PRECIO DE LISTA"]);
+  const descuentoValor = parseFloat(document.getElementById("input-descuento").value) || 0;
+  const descuentoValorUSD = modoDescuento === "monto" ? aUSD(descuentoValor) : descuentoValor;
+  const precioCierre = modoDescuento === "monto"
+    ? Math.max(precioLista - descuentoValorUSD, 0)
+    : precioLista * (1 - descuentoValorUSD / 100);
+
+  document.getElementById("out-precio-cierre").textContent = formatoMoneda(precioCierre);
+
+  document.getElementById("aviso-inicial-minima").style.display = "none";
+  document.getElementById("aviso-cuotas-max").style.display = "none";
+  document.getElementById("contenedor-cronograma").style.display = "none";
+
+  if (modo === "contado") return; // no hay cuotas que calcular
+
+  const inicial = aUSD(parseFloat(document.getElementById("input-inicial").value) || 0);
+  let numCuotas = parseInt(document.getElementById("input-cuotas").value) || 1;
+  const montoFinanciar = Math.max(precioCierre - inicial, 0);
+
+  if (modo === "credicontado") {
+    const inicialMinima = precioCierre * 0.30;
+    if (inicial < inicialMinima) {
+      document.getElementById("aviso-inicial-minima").style.display = "inline";
+    }
+    if (numCuotas > 12) {
+      document.getElementById("aviso-cuotas-max").style.display = "inline";
+    }
+  }
+
+  let cuotaMensual, tasaMensual = 0;
+
+  if (modo === "financiado") {
+    const tasaAnual = parseFloat(document.getElementById("input-tasa-interes").value) || 0;
+    tasaMensual = (tasaAnual / 100) / 12;
+    if (tasaMensual > 0) {
+      // cuota = (M * i) / (1 - (1+i)^-n)  — método francés
+      cuotaMensual = (montoFinanciar * tasaMensual) / (1 - Math.pow(1 + tasaMensual, -numCuotas));
+    } else {
+      cuotaMensual = montoFinanciar / numCuotas;
+    }
+  } else {
+    // Credicontado: sin interés, división simple
+    cuotaMensual = montoFinanciar / numCuotas;
+  }
+
+  document.getElementById("out-monto-financiar").textContent = formatoMoneda(montoFinanciar);
+  document.getElementById("out-cuota-mensual").textContent = formatoMoneda(cuotaMensual) + " / mes";
+
+  // Cronograma de pagos (cuota 0 = fecha de la inicial)
+  const fechaInicioStr = document.getElementById("input-fecha-inicio").value;
+  if (!fechaInicioStr) return;
+  const [anio, mes, dia] = fechaInicioStr.split("-").map(Number);
+  const fechaInicio = new Date(anio, mes - 1, dia);
+
+  const cuerpo = document.getElementById("cuerpo-cronograma");
+  cuerpo.innerHTML = "";
+
+  const filaInicial = document.createElement("tr");
+  filaInicial.innerHTML = `<td style="padding:4px;text-align:center;">0</td><td style="padding:4px;">${formatoFecha(fechaInicio)}</td>
+    <td style="padding:4px;text-align:right;">-</td><td style="padding:4px;text-align:right;">-</td>
+    <td style="padding:4px;text-align:right;">${formatoMoneda(inicial)}</td><td style="padding:4px;text-align:right;">${formatoMoneda(montoFinanciar)}</td>`;
+  cuerpo.appendChild(filaInicial);
+
+  let saldo = montoFinanciar;
+  for (let k = 1; k <= numCuotas; k++) {
+    const interes = saldo * tasaMensual;
+    const amortizacion = cuotaMensual - interes;
+    saldo = Math.max(saldo - amortizacion, 0);
+    const fechaCuota = sumarMeses(fechaInicio, k);
+
+    const fila = document.createElement("tr");
+    fila.innerHTML = `<td style="padding:4px;text-align:center;">${k}</td><td style="padding:4px;">${formatoFecha(fechaCuota)}</td>
+      <td style="padding:4px;text-align:right;">${formatoMoneda(interes)}</td><td style="padding:4px;text-align:right;">${formatoMoneda(amortizacion)}</td>
+      <td style="padding:4px;text-align:right;">${formatoMoneda(cuotaMensual)}</td><td style="padding:4px;text-align:right;">${formatoMoneda(saldo)}</td>`;
+    cuerpo.appendChild(fila);
+  }
+  document.getElementById("contenedor-cronograma").style.display = "block";
+}
+
+// ------------------------------------------------------------
+// Descargar cotización en PDF, con el plano y el lote resaltado
+// ------------------------------------------------------------
+function descargarCotizacionPDF() {
+  if (!loteActual || !idLoteAbierto) return;
+
+  const estadoBtn = document.getElementById("estado-pdf");
+  estadoBtn.textContent = "Generando PDF…";
+
+  // 1) Resaltar el lote en el mapa con un borde grueso y encuadrarlo
+  if (map.getLayer("resaltado-pdf")) map.removeLayer("resaltado-pdf");
+  map.addLayer({
+    id: "resaltado-pdf",
+    type: "line",
+    source: "plano",
+    filter: ["==", ["get", "id_lote"], idLoteAbierto],
+    paint: { "line-color": "#ff3d00", "line-width": 5 }
+  });
+
+  const feats = map.querySourceFeatures("plano", {
+    filter: ["==", ["get", "id_lote"], idLoteAbierto]
+  });
+
+  if (feats.length > 0) {
+    const coords = feats[0].geometry.coordinates[0];
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    coords.forEach(([lng, lat]) => {
+      minLng = Math.min(minLng, lng); maxLng = Math.max(maxLng, lng);
+      minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat);
+    });
+    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 120, maxZoom: 19, duration: 0 });
+  }
+
+  // 2) Esperar a que el mapa termine de renderizar, y recién ahí capturar y armar el PDF
+  //    (con límite de espera por si el evento 'idle' no dispara a tiempo)
+  let yaCapturo = false;
+  function capturarYGenerar() {
+    if (yaCapturo) return;
+    yaCapturo = true;
+    try {
+      const imagenMapa = map.getCanvas().toDataURL("image/png");
+      if (map.getLayer("resaltado-pdf")) map.removeLayer("resaltado-pdf");
+      generarDocumentoPDF(imagenMapa);
+      estadoBtn.textContent = "";
+    } catch (err) {
+      console.error("Error generando el PDF:", err);
+      estadoBtn.textContent = "Ocurrió un error, revisa la consola (F12).";
+    }
+  }
+  map.once("idle", capturarYGenerar);
+  setTimeout(capturarYGenerar, 1500); // respaldo por si 'idle' no dispara
+}
+
+function generarDocumentoPDF(imagenMapa) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const fila = loteActual;
+
+  // Encabezado
+  doc.setFontSize(16);
+  doc.setTextColor(27, 94, 32);
+  doc.text("PALACIO VERDE", 15, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text("Cotización de lote — " + new Date().toLocaleDateString("es-PE"), 15, 24);
+  doc.setDrawColor(200);
+  doc.line(15, 28, 195, 28);
+
+  // Datos del lote
+  doc.setFontSize(13);
+  doc.setTextColor(20);
+  doc.text("Lote " + idLoteAbierto, 15, 38);
+
+  doc.setFontSize(10);
+  doc.setTextColor(60);
+  const datos = [
+    ["Manzana", fila["MZ"] || "-"],
+    ["Área", (fila["ÁREA"] || "-") + " m²"],
+    ["Ubicación", fila["UBICACIÓN"] || "-"],
+    ["Tipo", fila["TIPO"] || "-"],
+    ["Estado", fila["ESTADO"] || "-"],
+    ["Frontis", (fila["FRONTIS"] || "-") + " m"],
+    ["Posterior", (fila["POSTERIOR"] || "-") + " m"],
+    ["Izquierdo", (fila["IZQUIERDO"] || "-") + " m"],
+    ["Derecho", (fila["DERECHO"] || "-") + " m"]
+  ];
+  let y = 46;
+  datos.forEach(([label, valor]) => {
+    doc.text(label + ":", 15, y);
+    doc.text(String(valor), 60, y);
+    y += 6;
+  });
+
+  // Imagen del plano con el lote resaltado
+  doc.addImage(imagenMapa, "PNG", 110, 38, 85, 65);
+  doc.setFontSize(8);
+  doc.setTextColor(140);
+  doc.text("Ubicación del lote dentro del proyecto", 110, 106);
+
+  // Cotización
+  y += 8;
+  doc.setDrawColor(220);
+  doc.line(15, y, 195, y);
+  y += 8;
+
+  doc.setFontSize(12);
+  doc.setTextColor(27, 94, 32);
+  doc.text("Cotización", 15, y);
+  y += 8;
+
+  doc.setFontSize(10);
+  doc.setTextColor(60);
+  const precioLista = limpiarMoneda(fila["PRECIO DE VENTA"] || fila["PRECIO DE LISTA"]);
+  doc.text("Precio de lista:", 15, y);
+  doc.text(formatoMoneda(precioLista), 70, y);
+  y += 6;
+
+  const valorDescuentoCrudo = parseFloat(document.getElementById("input-descuento").value) || 0;
+  const descuentoTexto = modoDescuento === "monto"
+    ? simboloMoneda() + " " + valorDescuentoCrudo.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : valorDescuentoCrudo + " %";
+  doc.text("Descuento:", 15, y);
+  doc.text(descuentoTexto, 70, y);
+  y += 6;
+
+  doc.setFontSize(11);
+  doc.setTextColor(20);
+  doc.text("Precio de cierre:", 15, y);
+  doc.text(document.getElementById("out-precio-cierre").textContent, 70, y);
+  y += 9;
+
+  const modo = obtenerModoPago();
+  const nombresModo = { contado: "Al contado", credicontado: "Credicontado", financiado: "Financiado" };
+  doc.setFontSize(10);
+  doc.setTextColor(60);
+  doc.text("Forma de pago:", 15, y);
+  doc.text(nombresModo[modo], 70, y);
+  y += 6;
+
+  if (modo !== "contado") {
+    const valorInicialCrudo = parseFloat(document.getElementById("input-inicial").value) || 0;
+    doc.text("Inicial:", 15, y);
+    doc.text(simboloMoneda() + " " + valorInicialCrudo.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 70, y);
+    y += 6;
+    doc.text("N° de cuotas:", 15, y);
+    doc.text(document.getElementById("input-cuotas").value, 70, y);
+    y += 6;
+    if (modo === "financiado") {
+      doc.text("Tasa nominal anual:", 15, y);
+      doc.text(document.getElementById("input-tasa-interes").value + " %", 70, y);
+      y += 6;
+    }
+    doc.text("Monto a financiar:", 15, y);
+    doc.text(document.getElementById("out-monto-financiar").textContent, 70, y);
+    y += 6;
+    doc.setFontSize(11);
+    doc.setTextColor(20);
+    doc.text("Cuota mensual:", 15, y);
+    doc.text(document.getElementById("out-cuota-mensual").textContent, 70, y);
+    y += 10;
+
+    // Cronograma de pagos (si está calculado)
+    const filasTabla = document.querySelectorAll("#cuerpo-cronograma tr");
+    if (filasTabla.length > 0 && y < 240) {
+      doc.setFontSize(10);
+      doc.setTextColor(27, 94, 32);
+      doc.text("Cronograma de pagos", 15, y);
+      y += 6;
+      doc.setFontSize(7.5);
+      doc.setTextColor(60);
+      doc.text("Cuota", 15, y); doc.text("Fecha", 35, y); doc.text("Interés", 65, y);
+      doc.text("Amortiz.", 95, y); doc.text("Cuota", 130, y); doc.text("Saldo", 160, y);
+      y += 4;
+      filasTabla.forEach((fila) => {
+        if (y > 280) { doc.addPage(); y = 20; }
+        const celdas = fila.querySelectorAll("td");
+        doc.text(celdas[0].textContent, 15, y);
+        doc.text(celdas[1].textContent, 35, y);
+        doc.text(celdas[2].textContent, 65, y);
+        doc.text(celdas[3].textContent, 95, y);
+        doc.text(celdas[4].textContent, 130, y);
+        doc.text(celdas[5].textContent, 160, y);
+        y += 4.5;
+      });
+    }
+  }
+
+  y += 6;
+  doc.setFontSize(8);
+  doc.setTextColor(150);
+  doc.text("Cotización referencial, sujeta a confirmación. Generada automáticamente desde el visor Palacio Verde.", 15, 285);
+
+  doc.save("Cotizacion_" + idLoteAbierto.replace(/\s/g, "") + ".pdf");
+}
+
+document.getElementById("btn-descargar-pdf").addEventListener("click", descargarCotizacionPDF);
+
+function seleccionarModoPago(modo) {
+  ["btn-contado", "btn-credicontado", "btn-financiado"].forEach((id) => {
+    document.getElementById(id).classList.toggle("activo", id === "btn-" + modo);
+  });
+
+  document.getElementById("campos-financiado").style.display = modo === "contado" ? "none" : "block";
+  document.getElementById("campo-tasa-interes").style.display = modo === "financiado" ? "block" : "none";
+  document.getElementById("campo-fecha-inicio").style.display = modo === "contado" ? "none" : "block";
+  document.getElementById("label-inicial").textContent = "Inicial (" + (modo === "credicontado" ? "mín. 30%" : simboloMoneda("filtro-moneda")) + ")";
+  document.getElementById("input-cuotas").max = modo === "credicontado" ? 12 : "";
+
+  calcularCotizacion();
+}
+
+document.getElementById("btn-contado").addEventListener("click", () => seleccionarModoPago("contado"));
+document.getElementById("btn-credicontado").addEventListener("click", () => seleccionarModoPago("credicontado"));
+document.getElementById("btn-financiado").addEventListener("click", () => seleccionarModoPago("financiado"));
+
+["input-descuento", "input-inicial", "input-cuotas", "input-tasa-interes", "input-fecha-inicio"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", calcularCotizacion);
+});
+
+function abrirPanelLote(idLote, fila) {
+  loteActual = fila || null;
+  idLoteAbierto = idLote;
+
+  if (map.getLayer("lote-seleccionado")) {
+    map.setFilter("lote-seleccionado", ["==", ["get", "id_lote"], idLote]);
+  }
+
+  document.getElementById("panel-titulo").textContent = "Lote " + idLote;
+
+  const badge = document.getElementById("panel-estado-badge");
+  const coloresBadge = { "VENDIDO": "#ef5350", "DISPONIBLE": "#66bb6a", "SEPARADO": "#1976d2", "BLOQUEADO": "#424242" };
+  const estado = fila ? (fila["ESTADO"] || "").trim().toUpperCase() : "";
+  badge.textContent = estado || "Sin datos";
+  badge.style.background = coloresBadge[estado] || "#999";
+
+  document.getElementById("dato-mz").textContent = fila ? (fila["MZ"] || "-") : "-";
+  document.getElementById("dato-area").textContent = fila ? (fila["ÁREA"] || "-") + " m²" : "-";
+  document.getElementById("dato-ubicacion").textContent = fila ? (fila["UBICACIÓN"] || "-") : "-";
+  document.getElementById("dato-tipo").textContent = fila ? (fila["TIPO"] || "-") : "-";
+  document.getElementById("dato-precio-lista").textContent = fila ? (fila["PRECIO DE LISTA"] || "-") : "-";
+
+  document.getElementById("dato-frontis").textContent = fila && fila["FRONTIS"] ? fila["FRONTIS"] + " m" : "-";
+  document.getElementById("dato-posterior").textContent = fila && fila["POSTERIOR"] ? fila["POSTERIOR"] + " m" : "-";
+  document.getElementById("dato-izquierdo").textContent = fila && fila["IZQUIERDO"] ? fila["IZQUIERDO"] + " m" : "-";
+  document.getElementById("dato-derecho").textContent = fila && fila["DERECHO"] ? fila["DERECHO"] + " m" : "-";
+
+  // Adicional 1 y 2 solo aplican a lotes irregulares (no cuadriláteros) — se ocultan si están vacíos
+  const adic1 = fila ? (fila["ADICIONAL 1"] || "").trim() : "";
+  const adic2 = fila ? (fila["ADICIONAL 2"] || "").trim() : "";
+  document.getElementById("fila-adicional1").style.display = adic1 ? "flex" : "none";
+  document.getElementById("dato-adicional1").textContent = adic1 ? adic1 + " m" : "";
+  document.getElementById("fila-adicional2").style.display = adic2 ? "flex" : "none";
+  document.getElementById("dato-adicional2").textContent = adic2 ? adic2 + " m" : "";
+
+  // Reiniciar el cotizador cada vez que se abre un lote nuevo
+  seleccionarModoPago("contado");
+  modoDescuento = CONFIG.tipoDescuentoPorDefecto;
+  actualizarModoDescuentoUI();
+  document.getElementById("input-descuento").value = 0;
+  document.getElementById("input-inicial").value = 0;
+  document.getElementById("input-cuotas").value = 12;
+  document.getElementById("input-tasa-interes").value = CONFIG.tasaInteresAnualDefecto;
+  document.getElementById("input-fecha-inicio").value = new Date().toISOString().slice(0, 10);
+
+  calcularCotizacion();
+  panelDerecho.classList.add("abierto");
+}
+
+map.on("load", () => {
+
+  // ------------------------------------------------------------
+  // Imagen del master plan (fondo, debajo de todo)
+  // Coordenadas extraídas directo del GroundOverlay (4 esquinas reales,
+  // no un simple norte/sur/este/oeste, por lo que respeta cualquier rotación)
+  // ------------------------------------------------------------
+  const ESQUINA_SUP_IZQ = [-77.25877959298145, -11.428323435223989];
+  const ESQUINA_SUP_DER = [-77.25655932419693, -11.428302228473916];
+  const ESQUINA_INF_DER = [-77.25654004433042, -11.430320759631572];
+  const ESQUINA_INF_IZQ = [-77.25876031311495, -11.430341966381645];
+
+  map.addSource("plano-master", {
+    type: "image",
+    url: "plano_master.png",
+    coordinates: [ESQUINA_SUP_IZQ, ESQUINA_SUP_DER, ESQUINA_INF_DER, ESQUINA_INF_IZQ]
+  });
+
+  map.addLayer({
+    id: "plano-master-layer",
+    type: "raster",
+    source: "plano-master",
+    paint: { "raster-opacity": 1 }
+  });
+
+  // ------------------------------------------------------------
+  // Fuente única: tu plano ya clasificado (lotes, vías, áreas verdes)
+  // ------------------------------------------------------------
+  map.addSource("plano", {
+    type: "geojson",
+    data: CONFIG.archivoPlano,
+    generateId: true,  // necesario para poder resaltar el lote al pasar el mouse
+    tolerance: 0,       // sin simplificación de geometría (evita distorsión en zooms altos)
+    maxzoom: 22          // mantiene precisión incluso muy acercado
+  });
+
+  // ------------------------------------------------------------
+  // 0) Límite del proyecto (solo borde, sin relleno, va al fondo de todo)
+  // ------------------------------------------------------------
+  map.addLayer({
+    id: "limite-proyecto",
+    type: "line",
+    source: "plano",
+    filter: ["==", ["get", "categoria"], "LIMITE_PROYECTO"],
+    paint: {
+      "line-color": "#ffffff",
+      "line-width": 3,
+      "line-dasharray": [2, 2]
+    }
+  });
+
+  // ------------------------------------------------------------
+  // 0.1) Zona resort (color propio, no se confunde con parques chicos)
+  // ------------------------------------------------------------
+  map.addLayer({
+    id: "zona-resort",
+    type: "fill",
+    source: "plano",
+    filter: ["==", ["get", "categoria"], "ZONA_RESORT"],
+    paint: {
+      "fill-color": "#00838f",
+      "fill-opacity": 0.35
+    }
+  });
+
+  // ------------------------------------------------------------
+  // 1) Áreas verdes / parques reales (chicos)
+  // ------------------------------------------------------------
+  map.addLayer({
+    id: "areas-verdes",
+    type: "fill",
+    source: "plano",
+    filter: ["==", ["get", "categoria"], "AREA_VERDE"],
+    paint: {
+      "fill-color": ["get", "fill"],  // respeta los tonos reales (verde jardín, naranja del camino, etc.)
+      "fill-opacity": 0.85
+    }
+  });
+
+  // (veredas y ciclovía se agregan más abajo, encima de los lotes)
+
+
+  // ------------------------------------------------------------
+  // 3) Lotes piloto (casas modelo, no en venta)
+  // ------------------------------------------------------------
+  map.addLayer({
+    id: "lotes-piloto",
+    type: "fill",
+    source: "plano",
+    filter: ["==", ["get", "categoria"], "LOTE_PILOTO"],
+    paint: {
+      "fill-color": "#9c27b0",
+      "fill-opacity": 0.6,
+      "fill-outline-color": "#000000"
+    }
+  });
+
+  // ------------------------------------------------------------
+  // 4) Lotes en venta (la capa principal, encima de todo)
+  //    Por ahora coloreados fijo en verde — en el siguiente paso
+  //    los coloreamos según el ESTADO real que traiga tu Google Sheets
+  // ------------------------------------------------------------
+  map.addLayer({
+    id: "lotes",
+    type: "fill",
+    source: "plano",
+    filter: ["==", ["get", "categoria"], "LOTE"],
+    paint: {
+      "fill-color": "#90caf9",   // color temporal — se reemplaza por el estado real al conectar Google Sheets
+      "fill-opacity": [
+        "case", ["boolean", ["feature-state", "hover"], false], 0.95, 0.75
+      ]
+    }
+  });
+
+  // Borde de cada lote como línea propia (no se desvanece al acercar zoom,
+  // a diferencia de fill-outline-color que es una línea fija de 1px)
+  map.addLayer({
+    id: "lotes-borde",
+    type: "line",
+    source: "plano",
+    filter: ["==", ["get", "categoria"], "LOTE"],
+    paint: {
+      "line-color": "#000000",
+      "line-width": 1
+    }
+  });
+
+  // Resaltado del lote actualmente seleccionado (se activa al abrir el panel,
+  // se apaga al cerrarlo — el filtro empieza sin coincidencias)
+  map.addLayer({
+    id: "lote-seleccionado",
+    type: "line",
+    source: "plano",
+    filter: ["==", ["get", "id_lote"], "__ninguno__"],
+    paint: {
+      "line-color": "#ffee58",
+      "line-width": 4
+    }
+  });
+
+  // Resaltado al pasar el mouse sobre un lote
+  let loteHoverId = null;
+  map.on("mousemove", "lotes", (e) => {
+    map.getCanvas().style.cursor = "pointer";
+    if (e.features.length > 0) {
+      if (loteHoverId !== null) {
+        map.setFeatureState({ source: "plano", id: loteHoverId }, { hover: false });
+      }
+      loteHoverId = e.features[0].id;
+      map.setFeatureState({ source: "plano", id: loteHoverId }, { hover: true });
+    }
+  });
+  map.on("mouseleave", "lotes", () => {
+    map.getCanvas().style.cursor = "";
+    if (loteHoverId !== null) {
+      map.setFeatureState({ source: "plano", id: loteHoverId }, { hover: false });
+    }
+    loteHoverId = null;
+  });
+
+  // ------------------------------------------------------------
+  // ------------------------------------------------------------
+  // Veredas (encima de los lotes, para que no queden tapadas
+  // por el borde negro del lote en los tramos rectos)
+  // ------------------------------------------------------------
+  map.addLayer({
+    id: "veredas",
+    type: "line",
+    source: "plano",
+    filter: ["==", ["get", "categoria"], "VEREDA"],
+    paint: {
+      "line-color": "#fdd835",  // amarillo, contrasta con rojo/verde/negro
+      "line-width": 2.5,
+      "line-opacity": 0.9
+    }
+  });
+
+  map.addLayer({
+    id: "ciclovia",
+    type: "fill",
+    source: "plano",
+    filter: ["==", ["get", "categoria"], "CICLOVIA"],
+    paint: {
+      "fill-color": "#cc3300",
+      "fill-opacity": 0.6
+    }
+  });
+
+  // Marcadores de manzana (círculo con la letra, ej. "A", "B1"),
+  // ahora generados desde las líneas de manzana (livianas, sin íconos)
+  // ------------------------------------------------------------
+  // ------------------------------------------------------------
+  // Marcadores de manzana — usando maplibregl.Marker (HTML real),
+  // más simple y confiable que las capas circle/symbol de WebGL
+  // ------------------------------------------------------------
+  fetch(CONFIG.archivoPlano).then(r => r.json()).then(json => {
+    json.features.forEach(f => {
+      if (f.properties.categoria !== "MANZANA_LABEL") return;
+
+      const el = document.createElement("div");
+      el.textContent = f.properties.name;
+      el.style.background = "#1e88e5";
+      el.style.color = "#ffffff";
+      el.style.fontWeight = "bold";
+      el.style.fontSize = "12px";
+      el.style.width = "26px";
+      el.style.height = "26px";
+      el.style.borderRadius = "50%";
+      el.style.border = "2px solid white";
+      el.style.display = "flex";
+      el.style.alignItems = "center";
+      el.style.justifyContent = "center";
+      el.style.boxShadow = "0 1px 4px rgba(0,0,0,0.5)";
+      el.style.willChange = "transform";
+      el.style.boxSizing = "border-box";
+
+      new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat(f.geometry.coordinates)
+        .addTo(map);
+    });
+  });
+
+  // ------------------------------------------------------------
+  // Números de LOTE — capa symbol nativa de MapLibre. A diferencia
+  // de calcular el centro nosotros mismos, MapLibre usa un algoritmo
+  // propio que garantiza que el texto caiga DENTRO del polígono,
+  // incluso si el lote es trapezoidal o irregular.
+  // ------------------------------------------------------------
+  // ------------------------------------------------------------
+  // Números de LOTE — mismo método confiable de marcador HTML que
+  // ya usamos para manzanas, con la posición EXACTA de tus propios
+  // marcadores (cruzados por ubicación real con cada lote)
+  // ------------------------------------------------------------
+  fetch(CONFIG.archivoPlano).then(r => r.json()).then(json => {
+    const marcadoresLote = [];
+
+    json.features.forEach(f => {
+      if (f.properties.categoria !== "LOTE_NUM_PUNTO") return;
+      const el = document.createElement("div");
+      el.textContent = f.properties.id_lote;
+      el.style.color = "#000000";
+      el.style.fontWeight = "600";
+      el.style.fontSize = "9px";
+      el.style.whiteSpace = "nowrap";
+      el.style.textShadow = "0 0 2px #fff, 0 0 2px #fff, 0 0 2px #fff, 0 0 2px #fff";
+      el.style.pointerEvents = "none";
+
+      const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat(f.geometry.coordinates)
+        .addTo(map);
+      marcadoresLote.push(marker);
+    });
+
+    function actualizarVisibilidadLotes() {
+      const visible = map.getZoom() >= 17;
+      marcadoresLote.forEach(m => {
+        m.getElement().style.display = visible ? "block" : "none";
+      });
+    }
+    actualizarVisibilidadLotes();
+    map.on("zoomend", actualizarVisibilidadLotes);
+  });
+
+  // ------------------------------------------------------------
+  // Marcadores de recorrido 360° — capa NATIVA del mapa (igual que
+  // los números de lote), para que nunca se desfasen durante el zoom
+  // ------------------------------------------------------------
+  let puntosTour = [];
+
+  const imagenOjo = new Image();
+  imagenOjo.onload = () => {
+    map.addImage("icono-ojo-360", imagenOjo);
+
+    map.addLayer({
+      id: "tour360-puntos",
+      type: "symbol",
+      source: "plano",
+      filter: ["==", ["get", "categoria"], "TOUR_360"],
+      layout: {
+        "icon-image": "icono-ojo-360",
+        "icon-size": 0.19,
+        "icon-allow-overlap": true
+      }
+    });
+
+    map.on("click", "tour360-puntos", (e) => {
+      const imagenClic = e.features[0].properties.imagen;
+      const indice = puntosTour.findIndex(p => p.properties.imagen === imagenClic);
+      if (indice !== -1) abrirTour360(indice);
+    });
+    map.on("mouseenter", "tour360-puntos", () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "tour360-puntos", () => { map.getCanvas().style.cursor = ""; });
+
+    // Intermitencia (parpadeo suave) — anima solo la opacidad de la capa,
+    // no las posiciones, así que no interfiere para nada con el zoom.
+    // Activable/desactivable con CONFIG.animarMarcadores360
+    if (CONFIG.animarMarcadores360) {
+      let inicio = null;
+      function animarPulso(timestamp) {
+        if (!inicio) inicio = timestamp;
+        const t = (timestamp - inicio) / 1000;
+        const opacidad = 0.55 + 0.45 * Math.abs(Math.sin(t * 1.8));
+        map.setPaintProperty("tour360-puntos", "icon-opacity", opacidad);
+        requestAnimationFrame(animarPulso);
+      }
+      requestAnimationFrame(animarPulso);
+    }
+  };
+  imagenOjo.onerror = () => console.error("No se pudo cargar el ícono 360 (revisar que icono_360_v2.png esté en la carpeta)");
+  imagenOjo.src = "icono_360_v2.png";
+
+  fetch(CONFIG.archivoPlano).then(r => r.json()).then(json => {
+    puntosTour = json.features.filter(f => f.properties.categoria === "TOUR_360");
+  });
+
+  // ------------------------------------------------------------
+  // Visor 360° (Marzipano) — panel acoplado, con navegación entre fotos
+  // ------------------------------------------------------------
+  let viewer360 = null;
+  let indiceTourActual = 0;
+
+  function cargarEscena360(indice) {
+    const punto = puntosTour[indice];
+    document.getElementById("titulo-360").textContent = punto.properties.name || "";
+    document.getElementById("tour-contador").textContent = (indice + 1) + " / " + puntosTour.length;
+
+    if (!viewer360) {
+      viewer360 = new Marzipano.Viewer(document.getElementById("pano"));
+    }
+
+    const source = Marzipano.ImageUrlSource.fromString(punto.properties.imagen);
+    const geometry = new Marzipano.EquirectGeometry([{ width: 4096 }]);
+    const limiter = Marzipano.RectilinearView.limit.traditional(4096, 100 * Math.PI / 180);
+    const view = new Marzipano.RectilinearView({ yaw: 0, pitch: 0, fov: Math.PI / 2 }, limiter);
+
+    const scene = viewer360.createScene({ source, geometry, view, pinFirstLevel: true });
+    scene.switchTo();
+  }
+
+  function abrirTour360(indice) {
+    indiceTourActual = indice;
+    document.getElementById("modal-360").style.display = "block";
+    cargarEscena360(indiceTourActual);
+  }
+
+  document.getElementById("cerrar-360").addEventListener("click", () => {
+    document.getElementById("modal-360").style.display = "none";
+  });
+  document.getElementById("btn-pantalla-completa").addEventListener("click", () => {
+    const panel = document.getElementById("modal-360");
+    panel.classList.toggle("completo");
+    document.getElementById("btn-pantalla-completa").textContent = panel.classList.contains("completo") ? "⤡" : "⛶";
+    if (viewer360) viewer360.updateSize();
+  });
+  document.getElementById("tour-anterior").addEventListener("click", () => {
+    indiceTourActual = (indiceTourActual - 1 + puntosTour.length) % puntosTour.length;
+    cargarEscena360(indiceTourActual);
+  });
+  document.getElementById("tour-siguiente").addEventListener("click", () => {
+    indiceTourActual = (indiceTourActual + 1) % puntosTour.length;
+    cargarEscena360(indiceTourActual);
+  });
+
+
+  // ------------------------------------------------------------
+  // Conexión con Google Sheets: colorea los lotes por ESTADO real
+  // y alimenta el popup con área y precio reales.
+  // ------------------------------------------------------------
+  let datosSheet = {};
+
+  function cargarDatosSheet() {
+    if (!CONFIG.sheetCsvUrl) return; // nada que hacer hasta que se complete el link
+
+    Papa.parse(CONFIG.sheetCsvUrl, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: (resultado) => {
+        resultado.data.forEach((fila) => {
+          const id = (fila["ID"] || "").trim();
+          if (id) datosSheet[id] = fila;
+        });
+
+        // Construir la expresión de color: ["match", ["get","id_lote"], "A - 1", "#color", ..., colorPorDefecto]
+        const expresionColor = ["match", ["get", "id_lote"]];
+        Object.keys(datosSheet).forEach((id) => {
+          const estado = (datosSheet[id]["ESTADO"] || "").trim().toUpperCase();
+          const colores = {
+            "VENDIDO": "#ef5350",
+            "DISPONIBLE": "#66bb6a",
+            "BLOQUEADO": "#424242",
+            "SEPARADO": "#1976d2"
+          };
+          expresionColor.push(id, colores[estado] || "#90caf9");
+        });
+        expresionColor.push("#90caf9"); // color por defecto si el lote no está en el Sheets
+
+        map.setPaintProperty("lotes", "fill-color", expresionColor);
+
+        poblarFiltros();
+      },
+      error: (err) => console.error("Error leyendo el Google Sheets:", err)
+    });
+  }
+
+  cargarDatosSheet();
+
+  // ------------------------------------------------------------
+  // Filtros: área, precio (sliders), tipo, ubicación (dropdowns)
+  // ------------------------------------------------------------
+  function poblarFiltros() {
+    const tipos = new Set();
+    const ubicaciones = new Set();
+    const areas = [];
+    const precios = [];
+
+    Object.values(datosSheet).forEach((fila) => {
+      if (fila["TIPO"] && fila["TIPO"].trim()) tipos.add(fila["TIPO"].trim());
+      if (fila["UBICACIÓN"] && fila["UBICACIÓN"].trim()) ubicaciones.add(fila["UBICACIÓN"].trim());
+      const area = parseFloat((fila["ÁREA"] || "").toString().replace(/[^0-9.]/g, ""));
+      const precio = limpiarMoneda(fila["PRECIO DE VENTA"] || fila["PRECIO DE LISTA"]);
+      if (!isNaN(area)) areas.push(area);
+      if (!isNaN(precio) && precio > 0) precios.push(precio);
+    });
+
+    const selTipo = document.getElementById("filtro-tipo");
+    [...tipos].sort().forEach((t) => {
+      const op = document.createElement("option");
+      op.value = t; op.textContent = t;
+      selTipo.appendChild(op);
+    });
+
+    const selUbic = document.getElementById("filtro-ubicacion");
+    [...ubicaciones].sort().forEach((u) => {
+      const op = document.createElement("option");
+      op.value = u; op.textContent = u;
+      selUbic.appendChild(op);
+    });
+
+    configurarSlider("filtro-area-min", "filtro-area-max", Math.min(...areas), Math.max(...areas));
+    configurarSlider("filtro-precio-min", "filtro-precio-max", Math.min(...precios), Math.max(...precios));
+    actualizarEtiquetasSliders();
+
+    aplicarFiltros(); // deja el contador inicial ("87 de 87", etc.)
+    poblarSelectorFinanciamiento();
+  }
+
+  function poblarSelectorFinanciamiento() {
+    const datalistMz = document.getElementById("fin-datalist-mz");
+    const manzanas = new Set();
+    Object.values(datosSheet).forEach((fila) => {
+      if (fila["MZ"] && fila["MZ"].trim()) manzanas.add(fila["MZ"].trim());
+    });
+    [...manzanas].sort().forEach((mz) => {
+      const op = document.createElement("option");
+      op.value = mz;
+      datalistMz.appendChild(op);
+    });
+  }
+
+  function configurarSlider(idMin, idMax, min, max) {
+    min = Math.floor(min);
+    max = Math.ceil(max);
+    const sMin = document.getElementById(idMin);
+    const sMax = document.getElementById(idMax);
+    [sMin, sMax].forEach((s) => { s.min = min; s.max = max; s.step = Math.max(1, Math.round((max - min) / 100)); });
+    sMin.value = min;
+    sMax.value = max;
+  }
+
+  function formatoNumero(n) {
+    return Math.round(n).toLocaleString("en-US");
+  }
+
+  function actualizarEtiquetasSliders() {
+    const areaMin = parseFloat(document.getElementById("filtro-area-min").value);
+    const areaMax = parseFloat(document.getElementById("filtro-area-max").value);
+    const precioMin = parseFloat(document.getElementById("filtro-precio-min").value);
+    const precioMax = parseFloat(document.getElementById("filtro-precio-max").value);
+    document.getElementById("valor-area-min").textContent = formatoNumero(areaMin) + " m²";
+    document.getElementById("valor-area-max").textContent = formatoNumero(areaMax) + " m²";
+    document.getElementById("valor-precio-min").textContent = "$" + formatoNumero(precioMin);
+    document.getElementById("valor-precio-max").textContent = "$" + formatoNumero(precioMax);
+  }
+
+  // Evita que el slider "mínimo" cruce al "máximo" y viceversa
+  function enlazarParSlider(idMin, idMax) {
+    const sMin = document.getElementById(idMin);
+    const sMax = document.getElementById(idMax);
+    sMin.addEventListener("input", () => {
+      if (parseFloat(sMin.value) > parseFloat(sMax.value)) sMin.value = sMax.value;
+      actualizarEtiquetasSliders();
+      aplicarFiltros();
+    });
+    sMax.addEventListener("input", () => {
+      if (parseFloat(sMax.value) < parseFloat(sMin.value)) sMax.value = sMin.value;
+      actualizarEtiquetasSliders();
+      aplicarFiltros();
+    });
+  }
+  enlazarParSlider("filtro-area-min", "filtro-area-max");
+  enlazarParSlider("filtro-precio-min", "filtro-precio-max");
+
+  function aplicarFiltros() {
+    const areaMin = parseFloat(document.getElementById("filtro-area-min").value);
+    const areaMax = parseFloat(document.getElementById("filtro-area-max").value);
+    const precioMin = parseFloat(document.getElementById("filtro-precio-min").value);
+    const precioMax = parseFloat(document.getElementById("filtro-precio-max").value);
+    const tipo = document.getElementById("filtro-tipo").value;
+    const ubicacion = document.getElementById("filtro-ubicacion").value;
+
+    const idsCoinciden = [];
+    let total = 0;
+
+    Object.keys(datosSheet).forEach((id) => {
+      total++;
+      const fila = datosSheet[id];
+      const area = parseFloat((fila["ÁREA"] || "").toString().replace(/[^0-9.]/g, ""));
+      const precio = limpiarMoneda(fila["PRECIO DE VENTA"] || fila["PRECIO DE LISTA"]);
+
+      if (!isNaN(areaMin) && area < areaMin) return;
+      if (!isNaN(areaMax) && area > areaMax) return;
+      if (!isNaN(precioMin) && precio < precioMin) return;
+      if (!isNaN(precioMax) && precio > precioMax) return;
+      if (tipo && (fila["TIPO"] || "").trim() !== tipo) return;
+      if (ubicacion && (fila["UBICACIÓN"] || "").trim() !== ubicacion) return;
+
+      idsCoinciden.push(id);
+    });
+
+    // Lotes que cumplen el filtro: resaltados. Los que no: atenuados.
+    map.setPaintProperty("lotes", "fill-opacity", [
+      "case",
+      ["boolean", ["feature-state", "hover"], false], 0.95,
+      ["in", ["get", "id_lote"], ["literal", idsCoinciden]], 0.8,
+      0.12
+    ]);
+
+    document.getElementById("contador-filtro").textContent = idsCoinciden.length + " de " + total + " lotes";
+  }
+
+  ["filtro-tipo", "filtro-ubicacion"]
+    .forEach((id) => document.getElementById(id).addEventListener("input", aplicarFiltros));
+
+  document.getElementById("btn-limpiar-filtros").addEventListener("click", () => {
+    document.getElementById("filtro-area-min").value = document.getElementById("filtro-area-min").min;
+    document.getElementById("filtro-area-max").value = document.getElementById("filtro-area-max").max;
+    document.getElementById("filtro-precio-min").value = document.getElementById("filtro-precio-min").min;
+    document.getElementById("filtro-precio-max").value = document.getElementById("filtro-precio-max").max;
+    document.getElementById("filtro-tipo").value = "";
+    document.getElementById("filtro-ubicacion").value = "";
+    actualizarEtiquetasSliders();
+    aplicarFiltros();
+  });
+
+  // ------------------------------------------------------------
+  // Clic en un lote → abre el panel derecho con detalle + cotizador
+  // ------------------------------------------------------------
+  map.on("click", "lotes", (e) => {
+    const props = e.features[0].properties;
+    const idLote = props.id_lote || props.name;
+    abrirPanelLote(idLote, datosSheet[idLote]);
+  });
+
+  // ==============================================================
+  // SIMULADOR DE FINANCIAMIENTO (sección de la barra lateral,
+  // versión ampliada del mismo cotizador, con selector de lote)
+  // ==============================================================
+  let finLoteActual = null;
+  let finModoDescuento = CONFIG.tipoDescuentoPorDefecto;
+
+  document.getElementById("fin-buscar-mz").addEventListener("input", (e) => {
+    const mz = e.target.value.trim();
+    const campoLoteN = document.getElementById("fin-buscar-lote-n");
+    const datalistLoteN = document.getElementById("fin-datalist-lote-n");
+
+    document.getElementById("fin-contenido").style.display = "none";
+    finLoteActual = null;
+    campoLoteN.value = "";
+    datalistLoteN.innerHTML = "";
+
+    const hayManzana = Object.values(datosSheet).some((f) => (f["MZ"] || "").trim() === mz);
+    if (!hayManzana) {
+      campoLoteN.disabled = true;
+      campoLoteN.placeholder = "Elige la manzana primero";
+      return;
+    }
+
+    campoLoteN.disabled = false;
+    campoLoteN.placeholder = "Escribe o elige el N° de lote";
+    Object.values(datosSheet)
+      .filter((f) => (f["MZ"] || "").trim() === mz)
+      .sort((a, b) => parseFloat(a["LOTE N°"]) - parseFloat(b["LOTE N°"]))
+      .forEach((f) => {
+        const op = document.createElement("option");
+        op.value = f["LOTE N°"];
+        datalistLoteN.appendChild(op);
+      });
+  });
+
+  document.getElementById("fin-buscar-lote-n").addEventListener("input", (e) => {
+    const mz = document.getElementById("fin-buscar-mz").value.trim();
+    const loteN = e.target.value.trim();
+
+    const fila = Object.values(datosSheet).find(
+      (f) => (f["MZ"] || "").trim() === mz && (f["LOTE N°"] || "").trim() === loteN
+    );
+
+    if (!fila) {
+      document.getElementById("fin-contenido").style.display = "none";
+      finLoteActual = null;
+      return;
+    }
+
+    finLoteActual = fila;
+    document.getElementById("fin-contenido").style.display = "block";
+
+    document.getElementById("fin-dato-mz").textContent = finLoteActual["MZ"] || "-";
+    document.getElementById("fin-dato-area").textContent = (finLoteActual["ÁREA"] || "-") + " m²";
+    document.getElementById("fin-dato-estado").textContent = finLoteActual["ESTADO"] || "-";
+    document.getElementById("fin-dato-precio-lista").textContent = finLoteActual["PRECIO DE LISTA"] || "-";
+
+    finModoDescuento = CONFIG.tipoDescuentoPorDefecto;
+    actualizarModoDescuentoFinUI();
+    document.getElementById("fin-input-descuento").value = 0;
+    document.getElementById("fin-input-inicial").value = 0;
+    document.getElementById("fin-input-cuotas").value = 12;
+    document.getElementById("fin-input-tasa-interes").value = CONFIG.tasaInteresAnualDefecto;
+    document.getElementById("fin-input-fecha-inicio").value = new Date().toISOString().slice(0, 10);
+
+    seleccionarModoFinanciamiento("contado");
+  });
+
+  function actualizarModoDescuentoFinUI() {
+    const esMonto = finModoDescuento === "monto";
+    const simbolo = simboloMoneda("fin-moneda");
+    document.getElementById("fin-btn-desc-porc").classList.toggle("activo", !esMonto);
+    document.getElementById("fin-btn-desc-monto").classList.toggle("activo", esMonto);
+    document.getElementById("fin-btn-desc-monto").textContent = simbolo;
+    document.getElementById("fin-label-descuento").textContent = esMonto ? ("Descuento (" + simbolo + ")") : "Descuento (%)";
+  }
+  document.getElementById("fin-btn-desc-porc").addEventListener("click", () => { finModoDescuento = "porcentaje"; actualizarModoDescuentoFinUI(); calcularFinanciamiento(); });
+  document.getElementById("fin-btn-desc-monto").addEventListener("click", () => { finModoDescuento = "monto"; actualizarModoDescuentoFinUI(); calcularFinanciamiento(); });
+
+  function obtenerModoFinanciamiento() {
+    if (document.getElementById("fin-btn-credicontado").classList.contains("activo")) return "credicontado";
+    if (document.getElementById("fin-btn-financiado").classList.contains("activo")) return "financiado";
+    return "contado";
+  }
+
+  function seleccionarModoFinanciamiento(modo) {
+    ["fin-btn-contado", "fin-btn-credicontado", "fin-btn-financiado"].forEach((id) => {
+      document.getElementById(id).classList.toggle("activo", id === "fin-btn-" + modo);
+    });
+    document.getElementById("fin-campos-financiado").style.display = modo === "contado" ? "none" : "block";
+    document.getElementById("fin-campo-tasa-interes").style.display = modo === "financiado" ? "block" : "none";
+    document.getElementById("fin-campo-fecha-inicio").style.display = modo === "contado" ? "none" : "block";
+    document.getElementById("fin-label-inicial").textContent = "Inicial (" + (modo === "credicontado" ? "mín. 30%" : simboloMoneda("fin-moneda")) + ")";
+    document.getElementById("fin-input-cuotas").max = modo === "credicontado" ? 12 : "";
+    calcularFinanciamiento();
+  }
+  document.getElementById("fin-btn-contado").addEventListener("click", () => seleccionarModoFinanciamiento("contado"));
+  document.getElementById("fin-btn-credicontado").addEventListener("click", () => seleccionarModoFinanciamiento("credicontado"));
+  document.getElementById("fin-btn-financiado").addEventListener("click", () => seleccionarModoFinanciamiento("financiado"));
+
+  ["fin-input-descuento", "fin-input-inicial", "fin-input-cuotas", "fin-input-tasa-interes", "fin-input-fecha-inicio"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", calcularFinanciamiento);
+  });
+  document.getElementById("fin-moneda").addEventListener("change", () => {
+    document.getElementById("fin-tipo-cambio").disabled = document.getElementById("fin-moneda").value === "USD";
+    actualizarModoDescuentoFinUI();
+    seleccionarModoFinanciamiento(obtenerModoFinanciamiento());
+  });
+  document.getElementById("fin-tipo-cambio").addEventListener("input", calcularFinanciamiento);
+
+  function calcularFinanciamiento() {
+    if (!finLoteActual) return;
+    const modo = obtenerModoFinanciamiento();
+
+    const precioLista = limpiarMoneda(finLoteActual["PRECIO DE VENTA"] || finLoteActual["PRECIO DE LISTA"]);
+    const descuentoValor = parseFloat(document.getElementById("fin-input-descuento").value) || 0;
+    const descuentoValorUSD = finModoDescuento === "monto" ? aUSD(descuentoValor, "fin-moneda", "fin-tipo-cambio") : descuentoValor;
+    const precioCierre = finModoDescuento === "monto"
+      ? Math.max(precioLista - descuentoValorUSD, 0)
+      : precioLista * (1 - descuentoValorUSD / 100);
+
+    document.getElementById("fin-out-precio-cierre").textContent = formatoMoneda(precioCierre, "fin-moneda", "fin-tipo-cambio");
+
+    document.getElementById("fin-aviso-inicial-minima").style.display = "none";
+    document.getElementById("fin-aviso-cuotas-max").style.display = "none";
+    document.getElementById("fin-contenedor-cronograma").style.display = "none";
+
+    if (modo === "contado") return;
+
+    const inicial = aUSD(parseFloat(document.getElementById("fin-input-inicial").value) || 0, "fin-moneda", "fin-tipo-cambio");
+    let numCuotas = parseInt(document.getElementById("fin-input-cuotas").value) || 1;
+    const montoFinanciar = Math.max(precioCierre - inicial, 0);
+
+    if (modo === "credicontado") {
+      if (inicial < precioCierre * 0.30) document.getElementById("fin-aviso-inicial-minima").style.display = "inline";
+      if (numCuotas > 12) document.getElementById("fin-aviso-cuotas-max").style.display = "inline";
+    }
+
+    let cuotaMensual, tasaMensual = 0;
+    if (modo === "financiado") {
+      const tasaAnual = parseFloat(document.getElementById("fin-input-tasa-interes").value) || 0;
+      tasaMensual = (tasaAnual / 100) / 12;
+      cuotaMensual = tasaMensual > 0
+        ? (montoFinanciar * tasaMensual) / (1 - Math.pow(1 + tasaMensual, -numCuotas))
+        : montoFinanciar / numCuotas;
+    } else {
+      cuotaMensual = montoFinanciar / numCuotas;
+    }
+
+    document.getElementById("fin-out-monto-financiar").textContent = formatoMoneda(montoFinanciar, "fin-moneda", "fin-tipo-cambio");
+    document.getElementById("fin-out-cuota-mensual").textContent = formatoMoneda(cuotaMensual, "fin-moneda", "fin-tipo-cambio") + " / mes";
+
+    const fechaInicioStr = document.getElementById("fin-input-fecha-inicio").value;
+    if (!fechaInicioStr) return;
+    const [anio, mes, dia] = fechaInicioStr.split("-").map(Number);
+    const fechaInicio = new Date(anio, mes - 1, dia);
+
+    const cuerpo = document.getElementById("fin-cuerpo-cronograma");
+    cuerpo.innerHTML = "";
+    const filaInicial = document.createElement("tr");
+    filaInicial.style.borderBottom = "1px solid #eee";
+    filaInicial.innerHTML = `<td style="padding:6px;text-align:center;">0</td><td style="padding:6px;">${formatoFecha(fechaInicio)}</td>
+      <td style="padding:6px;text-align:right;">-</td><td style="padding:6px;text-align:right;">-</td>
+      <td style="padding:6px;text-align:right;">${formatoMoneda(inicial, "fin-moneda", "fin-tipo-cambio")}</td><td style="padding:6px;text-align:right;">${formatoMoneda(montoFinanciar, "fin-moneda", "fin-tipo-cambio")}</td>`;
+    cuerpo.appendChild(filaInicial);
+
+    let saldo = montoFinanciar;
+    for (let k = 1; k <= numCuotas; k++) {
+      const interes = saldo * tasaMensual;
+      const amortizacion = cuotaMensual - interes;
+      saldo = Math.max(saldo - amortizacion, 0);
+      const fechaCuota = sumarMeses(fechaInicio, k);
+      const fila = document.createElement("tr");
+      fila.style.borderBottom = "1px solid #eee";
+      fila.innerHTML = `<td style="padding:6px;text-align:center;">${k}</td><td style="padding:6px;">${formatoFecha(fechaCuota)}</td>
+        <td style="padding:6px;text-align:right;">${formatoMoneda(interes, "fin-moneda", "fin-tipo-cambio")}</td><td style="padding:6px;text-align:right;">${formatoMoneda(amortizacion, "fin-moneda", "fin-tipo-cambio")}</td>
+        <td style="padding:6px;text-align:right;">${formatoMoneda(cuotaMensual, "fin-moneda", "fin-tipo-cambio")}</td><td style="padding:6px;text-align:right;">${formatoMoneda(saldo, "fin-moneda", "fin-tipo-cambio")}</td>`;
+      cuerpo.appendChild(fila);
+    }
+    document.getElementById("fin-contenedor-cronograma").style.display = "block";
+  }
+
+});
+</script>
+</body>
+</html>
