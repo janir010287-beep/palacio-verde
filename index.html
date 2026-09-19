@@ -495,8 +495,8 @@
           <label style="font-size:12px; font-weight:600; color:#555;">Mensaje</label>
           <textarea id="contacto-mensaje" rows="4" style="width:100%; padding:9px; margin-top:5px; border:1px solid #ccc; border-radius:5px; font-size:13px; box-sizing:border-box; font-family:inherit;"></textarea>
         </div>
-        <button type="submit" style="background:#1b5e20; color:white; border:none; padding:11px 22px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;">
-          Enviar mensaje
+        <button type="submit" style="background:#25D366; color:white; border:none; padding:11px 22px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;">
+          Enviar por WhatsApp
         </button>
       </form>
     </div>
@@ -664,6 +664,10 @@ const CONFIG = {
   // Correo donde llegan los mensajes del formulario de Contacto
   correoContacto: "janir010287@gmail.com",
 
+  // WhatsApp donde llegan los mensajes del formulario de Contacto
+  // (formato internacional, sin "+", sin espacios — 51 = Perú)
+  whatsappContacto: "51920267313",
+
   // --- Cotizador ---
   // Modalidades: Contado, Credicontado (sin interés, inicial mín. 30%, máx. 12 cuotas),
   // Financiado (con interés, tasa editable por el asesor, sin límite de cuotas fijo aquí).
@@ -714,7 +718,7 @@ const map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
 
 // ==============================================================
-// FORMULARIO DE CONTACTO — arma un correo prellenado (sin backend)
+// FORMULARIO DE CONTACTO — redirige a WhatsApp con el mensaje armado
 // ==============================================================
 document.getElementById("form-contacto").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -725,19 +729,14 @@ document.getElementById("form-contacto").addEventListener("submit", (e) => {
   const lote = document.getElementById("contacto-lote").value;
   const mensaje = document.getElementById("contacto-mensaje").value;
 
-  const asunto = "Consulta desde el visor Palacio Verde" + (lote ? " — Lote " + lote : "");
-  const cuerpo =
-    "Nombre: " + nombre + "\n" +
+  const texto =
+    "Hola, soy " + nombre + (lote ? ", me interesa el Lote " + lote : "") + ".\n" +
     "Teléfono: " + telefono + "\n" +
-    "Correo: " + correo + "\n" +
-    (lote ? "Lote de interés: " + lote + "\n" : "") +
-    "\nMensaje:\n" + (mensaje || "(sin mensaje)");
+    "Correo: " + correo +
+    (mensaje ? "\n\nMensaje: " + mensaje : "");
 
-  const mailto = "mailto:" + CONFIG.correoContacto
-    + "?subject=" + encodeURIComponent(asunto)
-    + "&body=" + encodeURIComponent(cuerpo);
-
-  window.location.href = mailto;
+  const whatsapp = "https://wa.me/" + CONFIG.whatsappContacto + "?text=" + encodeURIComponent(texto);
+  window.open(whatsapp, "_blank");
 });
 
 // ==============================================================
