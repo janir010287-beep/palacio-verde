@@ -215,13 +215,52 @@
   .popup-titulo { font-size: 15px; font-weight: bold; margin-bottom: 6px; }
   .popup-fila { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
   .popup-fila span:first-child { color: #666; }
+
+  /* ============================================================
+     RESPONSIVE — pantallas angostas (celular/tablet)
+     ============================================================ */
+  #btn-hamburguesa { display: none; font-size: 22px; cursor: pointer; padding: 0 4px; color: #1b5e20; }
+  #fondo-oscuro-movil {
+    display: none; position: absolute; top: 44px; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.45); z-index: 3.5;
+  }
+  #fondo-oscuro-movil.visible { display: block; }
+
+  @media (max-width: 760px) {
+    #encabezado { justify-content: flex-start; gap: 14px; padding: 0 14px; }
+    #btn-hamburguesa { display: block; }
+
+    /* La barra lateral se convierte en un panel deslizante (oculto por defecto) */
+    #sidebar-izq {
+      width: 240px; transform: translateX(-100%); transition: transform 0.25s ease; z-index: 7;
+    }
+    #sidebar-izq.abierta { transform: translateX(0); }
+
+    /* El mapa, filtros, secciones y leyenda pasan a ocupar todo el ancho */
+    #map, #vista-secciones { left: 0; }
+    #barra-filtros { left: 12px; flex-direction: column; align-items: stretch; }
+    #barra-filtros .campo-slider { width: 100%; }
+    #leyenda { left: 12px; }
+
+    /* El panel del lote ocupa toda la pantalla en vez de 320px fijos */
+    #panel-derecho { width: 100%; }
+
+    /* El visor 360 flotante, más angosto para no salirse de la pantalla */
+    #modal-360 { width: calc(100% - 24px); left: 12px; right: 12px; height: 260px; }
+    #modal-360.completo { left: 0; }
+
+    .vista-seccion { padding: 22px 16px 50px; }
+  }
 </style>
 </head>
 <body>
 
 <div id="encabezado">
+  <div id="btn-hamburguesa">☰</div>
   <div class="titulo-proyecto">PALACIO VERDE</div>
 </div>
+
+<div id="fondo-oscuro-movil"></div>
 
 <div id="sidebar-izq">
   <div class="sidebar-logo-top"><img src="logo_proyecto.png" alt="Palacio Verde" /></div>
@@ -698,6 +737,23 @@ const nombresSeccion = {
   contacto: "Contacto"
 };
 
+// ==============================================================
+// BARRA LATERAL EN MÓVIL — abrir/cerrar con el botón hamburguesa
+// ==============================================================
+const sidebarIzq = document.getElementById("sidebar-izq");
+const fondoOscuro = document.getElementById("fondo-oscuro-movil");
+
+function abrirSidebarMovil() {
+  sidebarIzq.classList.add("abierta");
+  fondoOscuro.classList.add("visible");
+}
+function cerrarSidebarMovil() {
+  sidebarIzq.classList.remove("abierta");
+  fondoOscuro.classList.remove("visible");
+}
+document.getElementById("btn-hamburguesa").addEventListener("click", abrirSidebarMovil);
+fondoOscuro.addEventListener("click", cerrarSidebarMovil);
+
 document.querySelectorAll("#sidebar-izq .item").forEach((item) => {
   item.addEventListener("click", () => {
     document.querySelectorAll("#sidebar-izq .item").forEach((i) => i.classList.remove("activo"));
@@ -705,6 +761,8 @@ document.querySelectorAll("#sidebar-izq .item").forEach((item) => {
 
     const seccion = item.dataset.seccion;
     const vistaSecciones = document.getElementById("vista-secciones");
+
+    cerrarSidebarMovil(); // en móvil, elegir una sección cierra el menú
 
     if (seccion === "plano") {
       vistaSecciones.style.display = "none";
