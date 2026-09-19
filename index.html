@@ -13,25 +13,25 @@
   html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: Arial, sans-serif; }
   #map { position: absolute; top: 44px; bottom: 0; left: 210px; right: 0; }
 
-  /* Encabezado delgado, solo texto */
+  /* Encabezado delgado, solo texto — cubre solo el área de contenido, no la barra lateral */
   #encabezado {
-    position: absolute; top: 0; left: 0; right: 0; height: 44px; z-index: 5;
+    position: absolute; top: 0; left: 210px; right: 0; height: 44px; z-index: 5;
     background: #ffffff; display: flex; align-items: center; justify-content: center;
     padding: 0 16px; box-shadow: 0 1px 6px rgba(0,0,0,0.25);
   }
   #encabezado .titulo-proyecto { font-size: 13px; font-weight: bold; color: #1b5e20; letter-spacing: 0.5px; }
 
-  /* Barra lateral izquierda */
+  /* Barra lateral izquierda — a todo lo largo, de arriba abajo */
   #sidebar-izq {
-    position: absolute; top: 44px; bottom: 0; left: 0; width: 210px; z-index: 4;
+    position: absolute; top: 0; bottom: 0; left: 0; width: 210px; z-index: 6;
     background: #1c1c1c; overflow-y: auto; display: flex; flex-direction: column;
   }
   .sidebar-logo-top { padding: 16px 20px 8px; text-align: center; }
-  .sidebar-logo-top img { max-width: 130px; max-height: 90px; display: inline-block; }
+  .sidebar-logo-top img { max-width: 143px; max-height: 99px; display: inline-block; }
   .sidebar-logo-bottom { padding: 14px 20px; text-align: center; border-top: 1px solid rgba(255,255,255,0.1); }
-  .sidebar-logo-bottom img { max-width: 165px; max-height: 105px; display: inline-block; }
+  .sidebar-logo-bottom img { max-width: 182px; max-height: 116px; display: inline-block; }
   #link-admin {
-    display: block; text-align: center; padding: 8px 12px; margin: auto 14px 0;
+    display: block; text-align: center; padding: 8px 12px; margin: auto 14px 16px;
     font-size: 11px; color: #888; text-decoration: none; border: 1px solid rgba(255,255,255,0.15);
     border-radius: 5px;
   }
@@ -245,7 +245,7 @@
   #fondo-oscuro-movil.visible { display: block; }
 
   @media (max-width: 760px) {
-    #encabezado { justify-content: flex-start; gap: 14px; padding: 0 14px; }
+    #encabezado { left: 0; justify-content: flex-start; gap: 14px; padding: 0 14px; }
     #btn-hamburguesa { display: block; }
 
     /* La barra lateral se convierte en un panel deslizante (oculto por defecto) */
@@ -1690,6 +1690,14 @@ map.on("load", () => {
   }
 
   cargarDatosSheet();
+
+  // Vuelve a consultar el Sheets automáticamente cada 2 minutos, en segundo
+  // plano, para que los cambios de estado (vendido/disponible/etc.) se vean
+  // sin que el asesor tenga que recargar la página manualmente.
+  // (Google actualiza su propia caché de "Publicar en la web" cada ~5 min,
+  // así que un cambio recién hecho puede tardar unos minutos en llegar de
+  // todas formas — eso ya no depende del visor.)
+  setInterval(cargarDatosSheet, 2 * 60 * 1000);
 
   // ------------------------------------------------------------
   // Filtros: área, precio (sliders), tipo, ubicación (dropdowns)
