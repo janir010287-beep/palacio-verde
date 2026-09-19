@@ -28,8 +28,14 @@
   }
   .sidebar-logo-top { padding: 16px 20px 8px; text-align: center; }
   .sidebar-logo-top img { max-width: 130px; max-height: 90px; display: inline-block; }
-  .sidebar-logo-bottom { margin-top: auto; padding: 14px 20px; text-align: center; border-top: 1px solid rgba(255,255,255,0.1); }
+  .sidebar-logo-bottom { padding: 14px 20px; text-align: center; border-top: 1px solid rgba(255,255,255,0.1); }
   .sidebar-logo-bottom img { max-width: 165px; max-height: 105px; display: inline-block; }
+  #link-admin {
+    display: block; text-align: center; padding: 8px 12px; margin: auto 14px 0;
+    font-size: 11px; color: #888; text-decoration: none; border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 5px;
+  }
+  #link-admin:hover { color: #ccc; border-color: rgba(255,255,255,0.3); }
   #sidebar-izq .item {
     display: flex; align-items: center; gap: 10px; padding: 14px 18px;
     color: #cccccc; font-size: 14px; cursor: pointer; border-left: 3px solid transparent;
@@ -282,6 +288,7 @@
   <div class="item" data-seccion="financiamiento"><span class="icono">💰</span> Financiamiento</div>
   <div class="item" data-seccion="documentacion"><span class="icono">📄</span> Documentación</div>
   <div class="item" data-seccion="contacto"><span class="icono">📞</span> Contacto</div>
+  <a href="https://docs.google.com/spreadsheets/d/1Ab3u0xrU-fnAavbQlgQf9t2aU-N6ZYXOw062bDP_AXI/edit?usp=sharing" target="_blank" id="link-admin">🔑 Administrador</a>
   <div class="sidebar-logo-bottom"><img src="logo_empresa.png" alt="Infinity Group MB" /></div>
 </div>
 
