@@ -72,7 +72,9 @@
   }
   #panel-derecho.abierto { transform: translateX(0); }
   #panel-derecho .cerrar {
-    position: absolute; top: 10px; right: 14px; font-size: 20px; cursor: pointer; color: #888;
+    position: absolute; top: 8px; right: 8px; font-size: 22px; cursor: pointer; color: #555;
+    width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; background: rgba(0,0,0,0.06); z-index: 10;
   }
   #panel-derecho h2 { margin: 4px 0 2px; font-size: 20px; color: #1b5e20; }
   #panel-derecho .estado-badge {
@@ -450,6 +452,11 @@
           </table>
         </div>
       </div>
+
+      <button id="fin-btn-descargar-pdf" style="width:100%; margin-top:6px; padding:12px; background:#1b5e20; color:white; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer;">
+        ⬇ Descargar cotización (PDF)
+      </button>
+      <div id="fin-estado-pdf" style="text-align:center; font-size:11px; color:#888; margin-top:6px;"></div>
 
     </div>
   </div>
@@ -990,8 +997,14 @@ function calcularCotizacion() {
 // ------------------------------------------------------------
 function descargarCotizacionPDF() {
   if (!loteActual || !idLoteAbierto) return;
+  descargarCotizacionPDFGenerica("estado-pdf", {
+    idLote: idLoteAbierto, fila: loteActual, modoDescuentoActual: modoDescuento,
+    modo: obtenerModoPago(), prefijo: "", idMoneda: "filtro-moneda", idTipoCambio: "input-tipo-cambio"
+  });
+}
 
-  const estadoBtn = document.getElementById("estado-pdf");
+function descargarCotizacionPDFGenerica(idEstadoBtn, opciones) {
+  const estadoBtn = document.getElementById(idEstadoBtn);
   estadoBtn.textContent = "Generando PDF…";
 
   // 1) Resaltar el lote en el mapa con un borde grueso y encuadrarlo
@@ -1000,12 +1013,12 @@ function descargarCotizacionPDF() {
     id: "resaltado-pdf",
     type: "line",
     source: "plano",
-    filter: ["==", ["get", "id_lote"], idLoteAbierto],
+    filter: ["==", ["get", "id_lote"], opciones.idLote],
     paint: { "line-color": "#ff3d00", "line-width": 5 }
   });
 
   const feats = map.querySourceFeatures("plano", {
-    filter: ["==", ["get", "id_lote"], idLoteAbierto]
+    filter: ["==", ["get", "id_lote"], opciones.idLote]
   });
 
   if (feats.length > 0) {
@@ -1025,9 +1038,9 @@ function descargarCotizacionPDF() {
     if (yaCapturo) return;
     yaCapturo = true;
     try {
-      const imagenMapa = map.getCanvas().toDataURL("image/png");
+      const imagenMapa = feats.length > 0 ? map.getCanvas().toDataURL("image/png") : null;
       if (map.getLayer("resaltado-pdf")) map.removeLayer("resaltado-pdf");
-      generarDocumentoPDF(imagenMapa);
+      generarDocumentoPDFGenerico(imagenMapa, opciones);
       estadoBtn.textContent = "";
     } catch (err) {
       console.error("Error generando el PDF:", err);
@@ -1039,9 +1052,18 @@ function descargarCotizacionPDF() {
 }
 
 function generarDocumentoPDF(imagenMapa) {
+  generarDocumentoPDFGenerico(imagenMapa, {
+    idLote: idLoteAbierto, fila: loteActual, modoDescuentoActual: modoDescuento,
+    modo: obtenerModoPago(), prefijo: "", idMoneda: "filtro-moneda", idTipoCambio: "input-tipo-cambio"
+  });
+}
+
+function generarDocumentoPDFGenerico(imagenMapa, opciones) {
+  const { idLote, fila, modoDescuentoActual, modo, prefijo, idMoneda, idTipoCambio } = opciones;
+  const p = (id) => document.getElementById(prefijo + id);
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const fila = loteActual;
 
   // Encabezado
   doc.setFontSize(16);
@@ -1056,7 +1078,7 @@ function generarDocumentoPDF(imagenMapa) {
   // Datos del lote
   doc.setFontSize(13);
   doc.setTextColor(20);
-  doc.text("Lote " + idLoteAbierto, 15, 38);
+  doc.text("Lote " + idLote, 15, 38);
 
   doc.setFontSize(10);
   doc.setTextColor(60);
@@ -1078,11 +1100,13 @@ function generarDocumentoPDF(imagenMapa) {
     y += 6;
   });
 
-  // Imagen del plano con el lote resaltado
-  doc.addImage(imagenMapa, "PNG", 110, 38, 85, 65);
-  doc.setFontSize(8);
-  doc.setTextColor(140);
-  doc.text("Ubicación del lote dentro del proyecto", 110, 106);
+  // Imagen del plano con el lote resaltado (si se pudo capturar)
+  if (imagenMapa) {
+    doc.addImage(imagenMapa, "PNG", 110, 38, 85, 65);
+    doc.setFontSize(8);
+    doc.setTextColor(140);
+    doc.text("Ubicación del lote dentro del proyecto", 110, 106);
+  }
 
   // Cotización
   y += 8;
@@ -1099,12 +1123,12 @@ function generarDocumentoPDF(imagenMapa) {
   doc.setTextColor(60);
   const precioLista = limpiarMoneda(fila["PRECIO DE VENTA"] || fila["PRECIO DE LISTA"]);
   doc.text("Precio de lista:", 15, y);
-  doc.text(formatoMoneda(precioLista), 70, y);
+  doc.text(formatoMoneda(precioLista, idMoneda, idTipoCambio), 70, y);
   y += 6;
 
-  const valorDescuentoCrudo = parseFloat(document.getElementById("input-descuento").value) || 0;
-  const descuentoTexto = modoDescuento === "monto"
-    ? simboloMoneda() + " " + valorDescuentoCrudo.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const valorDescuentoCrudo = parseFloat(p("input-descuento").value) || 0;
+  const descuentoTexto = modoDescuentoActual === "monto"
+    ? simboloMoneda(idMoneda) + " " + valorDescuentoCrudo.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : valorDescuentoCrudo + " %";
   doc.text("Descuento:", 15, y);
   doc.text(descuentoTexto, 70, y);
@@ -1113,10 +1137,9 @@ function generarDocumentoPDF(imagenMapa) {
   doc.setFontSize(11);
   doc.setTextColor(20);
   doc.text("Precio de cierre:", 15, y);
-  doc.text(document.getElementById("out-precio-cierre").textContent, 70, y);
+  doc.text(p("out-precio-cierre").textContent, 70, y);
   y += 9;
 
-  const modo = obtenerModoPago();
   const nombresModo = { contado: "Al contado", credicontado: "Credicontado", financiado: "Financiado" };
   doc.setFontSize(10);
   doc.setTextColor(60);
@@ -1125,29 +1148,29 @@ function generarDocumentoPDF(imagenMapa) {
   y += 6;
 
   if (modo !== "contado") {
-    const valorInicialCrudo = parseFloat(document.getElementById("input-inicial").value) || 0;
+    const valorInicialCrudo = parseFloat(p("input-inicial").value) || 0;
     doc.text("Inicial:", 15, y);
-    doc.text(simboloMoneda() + " " + valorInicialCrudo.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 70, y);
+    doc.text(simboloMoneda(idMoneda) + " " + valorInicialCrudo.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 70, y);
     y += 6;
     doc.text("N° de cuotas:", 15, y);
-    doc.text(document.getElementById("input-cuotas").value, 70, y);
+    doc.text(p("input-cuotas").value, 70, y);
     y += 6;
     if (modo === "financiado") {
       doc.text("Tasa nominal anual:", 15, y);
-      doc.text(document.getElementById("input-tasa-interes").value + " %", 70, y);
+      doc.text(p("input-tasa-interes").value + " %", 70, y);
       y += 6;
     }
     doc.text("Monto a financiar:", 15, y);
-    doc.text(document.getElementById("out-monto-financiar").textContent, 70, y);
+    doc.text(p("out-monto-financiar").textContent, 70, y);
     y += 6;
     doc.setFontSize(11);
     doc.setTextColor(20);
     doc.text("Cuota mensual:", 15, y);
-    doc.text(document.getElementById("out-cuota-mensual").textContent, 70, y);
+    doc.text(p("out-cuota-mensual").textContent, 70, y);
     y += 10;
 
     // Cronograma de pagos (si está calculado)
-    const filasTabla = document.querySelectorAll("#cuerpo-cronograma tr");
+    const filasTabla = document.querySelectorAll("#" + prefijo + "cuerpo-cronograma tr");
     if (filasTabla.length > 0 && y < 240) {
       doc.setFontSize(10);
       doc.setTextColor(27, 94, 32);
@@ -1158,9 +1181,9 @@ function generarDocumentoPDF(imagenMapa) {
       doc.text("Cuota", 15, y); doc.text("Fecha", 35, y); doc.text("Interés", 65, y);
       doc.text("Amortiz.", 95, y); doc.text("Cuota", 130, y); doc.text("Saldo", 160, y);
       y += 4;
-      filasTabla.forEach((fila) => {
+      filasTabla.forEach((filaFila) => {
         if (y > 280) { doc.addPage(); y = 20; }
-        const celdas = fila.querySelectorAll("td");
+        const celdas = filaFila.querySelectorAll("td");
         doc.text(celdas[0].textContent, 15, y);
         doc.text(celdas[1].textContent, 35, y);
         doc.text(celdas[2].textContent, 65, y);
@@ -1177,7 +1200,7 @@ function generarDocumentoPDF(imagenMapa) {
   doc.setTextColor(150);
   doc.text("Cotización referencial, sujeta a confirmación. Generada automáticamente desde el visor Palacio Verde.", 15, 285);
 
-  doc.save("Cotizacion_" + idLoteAbierto.replace(/\s/g, "") + ".pdf");
+  doc.save("Cotizacion_" + idLote.replace(/\s/g, "") + ".pdf");
 }
 
 document.getElementById("btn-descargar-pdf").addEventListener("click", descargarCotizacionPDF);
@@ -1823,6 +1846,7 @@ map.on("load", () => {
   // versión ampliada del mismo cotizador, con selector de lote)
   // ==============================================================
   let finLoteActual = null;
+  let finIdLoteActual = null;
   let finModoDescuento = CONFIG.tipoDescuentoPorDefecto;
 
   document.getElementById("fin-buscar-mz").addEventListener("input", (e) => {
@@ -1858,16 +1882,19 @@ map.on("load", () => {
     const mz = document.getElementById("fin-buscar-mz").value.trim();
     const loteN = e.target.value.trim();
 
-    const fila = Object.values(datosSheet).find(
-      (f) => (f["MZ"] || "").trim() === mz && (f["LOTE N°"] || "").trim() === loteN
+    const entrada = Object.entries(datosSheet).find(
+      ([id, f]) => (f["MZ"] || "").trim() === mz && (f["LOTE N°"] || "").trim() === loteN
     );
 
-    if (!fila) {
+    if (!entrada) {
       document.getElementById("fin-contenido").style.display = "none";
       finLoteActual = null;
+      finIdLoteActual = null;
       return;
     }
 
+    const [idEncontrado, fila] = entrada;
+    finIdLoteActual = idEncontrado;
     finLoteActual = fila;
     document.getElementById("fin-contenido").style.display = "block";
 
@@ -2000,6 +2027,14 @@ map.on("load", () => {
     }
     document.getElementById("fin-contenedor-cronograma").style.display = "block";
   }
+
+  document.getElementById("fin-btn-descargar-pdf").addEventListener("click", () => {
+    if (!finLoteActual || !finIdLoteActual) return;
+    descargarCotizacionPDFGenerica("fin-estado-pdf", {
+      idLote: finIdLoteActual, fila: finLoteActual, modoDescuentoActual: finModoDescuento,
+      modo: obtenerModoFinanciamiento(), prefijo: "fin-", idMoneda: "fin-moneda", idTipoCambio: "fin-tipo-cambio"
+    });
+  });
 
 });
 </script>
